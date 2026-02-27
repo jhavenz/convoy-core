@@ -1,0 +1,12 @@
+/vendor/
+/composer.lock
+/.phpunit.cache/
+/phpunit.xml
+/.phpstan/
+/phpstan.neon
+*.cache
+.*
+*.md
+!.gitattributes
+!.gitignore
+!README.md

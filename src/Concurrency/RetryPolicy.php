@@ -1,0 +1,91 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Convoy\Concurrency;
+
+use Convoy\Exception\CancelledException;
+use Throwable;
+
+final readonly class RetryPolicy
+{
+    public function __construct(
+        public int $attempts,
+        public string $backoff,
+        public float $baseDelayMs,
+        public float $maxDelayMs,
+        /** @var list<class-string<Throwable>> */
+        public array $retryOn = [],
+    ) {
+        if ($attempts < 1) {
+            throw new \InvalidArgumentException('Attempts must be at least 1');
+        }
+        if (!in_array($backoff, ['exponential', 'linear', 'fixed'], true)) {
+            throw new \InvalidArgumentException("Invalid backoff strategy: $backoff");
+        }
+    }
+
+    public static function exponential(
+        int $attempts,
+        float $baseDelayMs = 100.0,
+        float $maxDelayMs = 30000.0,
+    ): self {
+        return new self($attempts, 'exponential', $baseDelayMs, $maxDelayMs);
+    }
+
+    public static function linear(
+        int $attempts,
+        float $baseDelayMs = 100.0,
+        float $maxDelayMs = 30000.0,
+    ): self {
+        return new self($attempts, 'linear', $baseDelayMs, $maxDelayMs);
+    }
+
+    public static function fixed(
+        int $attempts,
+        float $delayMs = 1000.0,
+    ): self {
+        return new self($attempts, 'fixed', $delayMs, $delayMs);
+    }
+
+    /** @param class-string<Throwable> ...$exceptions */
+    public function retryingOn(string ...$exceptions): self
+    {
+        return new self(
+            $this->attempts,
+            $this->backoff,
+            $this->baseDelayMs,
+            $this->maxDelayMs,
+            array_values($exceptions),
+        );
+    }
+
+    public function calculateDelay(int $attempt): float
+    {
+        if ($attempt < 1) {
+            return 0.0;
+        }
+
+        $delay = match ($this->backoff) {
+            'exponential' => $this->baseDelayMs * (2 ** ($attempt - 1)),
+            'linear' => $this->baseDelayMs * $attempt,
+            default => $this->baseDelayMs,
+        };
+
+        $jitter = $delay * 0.1 * (mt_rand(0, 100) / 100);
+
+        return min($delay + $jitter, $this->maxDelayMs);
+    }
+
+    public function shouldRetry(Throwable $e): bool
+    {
+        if ($e instanceof CancelledException) {
+            return false;
+        }
+
+        if ($this->retryOn === []) {
+            return true;
+        }
+        return array_any($this->retryOn, fn($exceptionClass): bool => $e instanceof $exceptionClass);
+    }
+}
