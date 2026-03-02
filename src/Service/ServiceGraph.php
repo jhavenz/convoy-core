@@ -11,9 +11,9 @@ final readonly class ServiceGraph
     public function __construct(
         /** @var array<string, CompiledService> */
         public array $services,
-        /** @var array<string, string> interface => concrete */
+        /** @var array<string, string> */
         public array $aliases,
-        /** @var array<string, mixed> resolved config objects */
+        /** @var array<string, mixed> */
         public array $configs,
     ) {
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Convoy\Service;
 
 use Closure;
+use Convoy\Support\ClassNames;
 use Convoy\Trace\Trace;
 use Convoy\Trace\TraceType;
 use ReflectionClass;
@@ -18,12 +19,12 @@ final class LazyFactory
         $ref = new ReflectionClass($type);
 
         if ($ref->isFinal() || $ref->isInternal() || $ref->isInterface() || $ref->isAbstract()) {
-            $trace->log(TraceType::ServiceInit, self::shortName($type));
+            $trace->log(TraceType::ServiceInit, ClassNames::short($type));
             return $factory();
         }
 
-        return $ref->newLazyGhost(function (object $ghost) use ($factory, $type, $trace, $ref): void {
-            $trace->log(TraceType::ServiceInit, self::shortName($type));
+        return $ref->newLazyGhost(static function (object $ghost) use ($factory, $type, $trace, $ref): void {
+            $trace->log(TraceType::ServiceInit, ClassNames::short($type));
 
             $real = $factory();
 
@@ -56,11 +57,5 @@ final class LazyFactory
         }
 
         return $obj;
-    }
-
-    private static function shortName(string $type): string
-    {
-        $parts = explode('\\', $type);
-        return end($parts);
     }
 }

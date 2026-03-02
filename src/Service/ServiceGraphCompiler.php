@@ -174,7 +174,7 @@ final class ServiceGraphCompiler
         $order = [];
         $seen = [];
 
-        $resolve = function (string $type) use (&$resolve, &$order, &$seen, $definitions, $aliases): void {
+        $resolve = static function (string $type) use (&$resolve, &$order, &$seen, $definitions, $aliases): void {
             if (isset($seen[$type])) {
                 return;
             }
@@ -201,7 +201,7 @@ final class ServiceGraphCompiler
 
     private function defaultFactory(string $type): \Closure
     {
-        return function (...$args) use ($type): object {
+        return static function (...$args) use ($type): object {
             return new $type(...$args);
         };
     }

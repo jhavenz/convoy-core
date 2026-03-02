@@ -50,10 +50,7 @@
   "autoload": {
     "psr-4": {
       "Convoy\\": "src/"
-    },
-    "classmap": [
-      "src/Scope.php"
-    ]
+    }
   },
   "autoload-dev": {
     "psr-4": {

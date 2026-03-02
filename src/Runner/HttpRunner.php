@@ -6,7 +6,6 @@ namespace Convoy\Runner;
 
 use Convoy\AppHost;
 use Convoy\Concurrency\CancellationToken;
-use Convoy\Scope;
 use Convoy\Trace\TraceType;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;

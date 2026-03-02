@@ -32,7 +32,6 @@ final class SettlementBag implements ArrayAccess, IteratorAggregate, Countable
     ) {
         $values = [];
         $errors = [];
-
         foreach ($settlements as $key => $settlement) {
             if ($settlement->isOk) {
                 $values[$key] = $settlement->value;

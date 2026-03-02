@@ -6,6 +6,7 @@ namespace Convoy\Service;
 
 use Closure;
 use Convoy\Lifecycle\LifecycleCallbacks;
+use Convoy\Support\ClassNames;
 
 final readonly class CompiledService
 {
@@ -14,7 +15,7 @@ final readonly class CompiledService
      */
     public function __construct(
         public string $type,
-        /** @var list<string> Topologically sorted dependencies */
+        /** @var list<string> */
         public array $dependencyOrder,
         public Closure $factory,
         public bool $singleton,
@@ -25,7 +26,6 @@ final readonly class CompiledService
 
     public function shortName(): string
     {
-        $parts = explode('\\', $this->type);
-        return end($parts);
+        return ClassNames::short($this->type);
     }
 }

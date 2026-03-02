@@ -13,7 +13,7 @@ final class ServiceCatalog implements Services
 
     /** @var array<string, Closure> type => fromContext closure */
     private array $configs = [];
-    
+
     /** @var array<string, ServiceDefinition> */
     private array $definitions = [];
 

@@ -18,9 +18,9 @@ final class TraceEntry
         public readonly ?string $error = null,
         public readonly ?int $memoryBytes = null,
         public readonly ?int $fiberId = null,
-        /** @var list<object>|null Raw frames for lazy resolution */
+        /** @var list<object>|null */
         private readonly ?array $rawFrames = null,
-        /** @var object|null Task object for args extraction */
+        /** @var object|null */
         private readonly ?object $task = null,
         private readonly ?string $applicationPath = null,
     ) {
@@ -74,24 +74,24 @@ final class TraceEntry
         }
 
         foreach ($this->rawFrames as $frame) {
-            $file = $frame->file ?? '';
+            $file = (string) ($frame->file ?? '');
 
             if ($file === '' || $file === 'unknown') {
                 continue;
             }
-            if (str_contains((string) $file, 'Trace.php')) {
+            if (str_contains($file, 'Trace.php')) {
                 continue;
             }
-            if (str_contains((string) $file, 'Core.php')) {
+            if (str_contains($file, 'Core.php')) {
                 continue;
             }
-            if (str_contains((string) $file, '/Services/')) {
+            if (str_contains($file, '/Services/')) {
                 continue;
             }
-            if (str_contains((string) $file, '/Http/')) {
+            if (str_contains($file, '/Http/')) {
                 continue;
             }
-            if (str_contains((string) $file, 'vendor/')) {
+            if (str_contains($file, 'vendor/')) {
                 continue;
             }
 
@@ -110,7 +110,9 @@ final class TraceEntry
         }
 
         $ref = new \ReflectionClass($task);
-        $props = $ref->getProperties(\ReflectionProperty::IS_PUBLIC | \ReflectionProperty::IS_PROTECTED | \ReflectionProperty::IS_PRIVATE);
+        $props = $ref->getProperties(
+            \ReflectionProperty::IS_PUBLIC | \ReflectionProperty::IS_PROTECTED | \ReflectionProperty::IS_PRIVATE
+        );
 
         $parts = [];
         foreach ($props as $prop) {

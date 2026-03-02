@@ -1,0 +1,129 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Convoy;
+
+use Convoy\Middleware\ServiceTransform;
+use Convoy\Middleware\TaskInterceptor;
+use Convoy\Service\LazySingleton;
+use Convoy\Service\ServiceBundle;
+use Convoy\Service\ServiceCatalog;
+use Convoy\Service\ServiceGraphCompiler;
+use Convoy\Trace\Trace;
+use Convoy\Trace\TraceType;
+
+final class ApplicationBuilder
+{
+    private bool $discover = false;
+
+    private ?Trace $trace = null;
+
+    /** @var list<ServiceBundle> */
+    private array $providers = [];
+
+    /** @var list<TaskInterceptor> */
+    private array $taskInterceptors = [];
+
+    /** @var list<ServiceTransform> */
+    private array $serviceTransforms = [];
+
+    /** @param array<string, mixed> $context */
+    public function __construct(
+        private readonly array $context,
+    ) {
+    }
+
+    public function middleware(ServiceTransform ...$transforms): self
+    {
+        foreach ($transforms as $transform) {
+            $this->serviceTransforms[] = $transform;
+        }
+
+        return $this;
+    }
+
+    public function taskMiddleware(TaskInterceptor ...$interceptors): self
+    {
+        foreach ($interceptors as $interceptor) {
+            $this->taskInterceptors[] = $interceptor;
+        }
+
+        return $this;
+    }
+
+    public function discover(): self
+    {
+        $this->discover = true;
+        return $this;
+    }
+
+    public function providers(ServiceBundle ...$providers): self
+    {
+        foreach ($providers as $provider) {
+            $this->providers[] = $provider;
+        }
+
+        return $this;
+    }
+
+    public function withTrace(Trace $trace): self
+    {
+        $this->trace = $trace;
+        return $this;
+    }
+
+    public function compile(): Application
+    {
+        $trace = $this->trace ?? Trace::fromContext($this->context);
+        $trace->log(TraceType::LifecycleStartup, 'compiling');
+
+        $registry = new ServiceCatalog();
+
+        if ($this->discover) {
+            $this->loadDiscoveredProviders();
+        }
+
+        foreach ($this->providers as $provider) {
+            $provider->services($registry, $this->context);
+        }
+
+        $compiler = new ServiceGraphCompiler();
+        $graph = $compiler->compile($registry, $this->serviceTransforms, $this->context);
+
+        $singletons = new LazySingleton($graph, $trace);
+
+        return Application::create($graph, $singletons, $trace, $this->providers, $this->taskInterceptors);
+    }
+
+    private function loadDiscoveredProviders(): void
+    {
+        $vendorPath = $this->context['vendor_path']
+            ?? ($this->context['project_dir'] ?? null) . '/vendor'
+            ?? null;
+
+        if ($vendorPath === null) {
+            return;
+        }
+
+        $providersFile = $vendorPath . '/convoy/providers.php';
+        if (!file_exists($providersFile)) {
+            return;
+        }
+        $providers = require $providersFile;
+        if (!is_array($providers)) {
+            return;
+        }
+        foreach ($providers as $providerClass) {
+            if (!class_exists($providerClass)) {
+                continue;
+            }
+
+            $provider = new $providerClass();
+
+            if ($provider instanceof ServiceBundle) {
+                $this->providers[] = $provider;
+            }
+        }
+    }
+}

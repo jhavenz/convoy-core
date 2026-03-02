@@ -6,18 +6,19 @@ namespace Convoy\Trace;
 
 final class Trace
 {
-    private float $requestStartMs;
-    private int $concurrentDepth = 0;
-    private readonly string $applicationPath;
-
     /** @var list<TraceEntry> */
     private array $entries = [];
 
+    private float $requestStartMs;
+
     private int $sampleCounter = 0;
+    private int $concurrentDepth = 0;
     private int $servicesCreated = 0;
-    private int $servicesDisposed = 0;
     private int $peakMemoryBytes = 0;
     private int $lastMemoryBytes = 0;
+    private int $servicesDisposed = 0;
+
+    private readonly string $applicationPath;
 
     public function __construct(
         private readonly bool $enabled = true,
@@ -25,14 +26,14 @@ final class Trace
     ) {
         $this->requestStartMs = hrtime(true) / 1e6;
         $this->lastMemoryBytes = memory_get_usage(true);
-        $this->applicationPath = $applicationPath ?? (getcwd() ?: '');
+        $this->applicationPath = $applicationPath ?? (getcwd() ?: "");
     }
 
     /** @param array<string, mixed> $context */
     public static function fromContext(array $context, ?string $applicationPath = null): self
     {
-        $envValue = $context['CONVOY_TRACE'] ?? false;
-        $enabled = !in_array($envValue, [false, '', '0'], true);
+        $envValue = $context["CONVOY_TRACE"] ?? false;
+        $enabled = !in_array($envValue, [false, "", "0"], true);
         return new self($enabled, $applicationPath);
     }
 
@@ -62,8 +63,8 @@ final class Trace
         $now = hrtime(true) / 1e6;
         $timestampMs = $now - $this->requestStartMs;
 
-        $durationMs = $extra['elapsed'] ?? $extra['duration'] ?? null;
-        $error = $extra['error'] ?? null;
+        $durationMs = $extra["elapsed"] ?? ($extra["duration"] ?? null);
+        $error = $extra["error"] ?? null;
 
         if ($type === TraceType::ConcurrentStart) {
             $this->concurrentDepth++;
@@ -119,7 +120,7 @@ final class Trace
             return;
         }
 
-        $totalMs = (hrtime(true) / 1e6) - $this->requestStartMs;
+        $totalMs = hrtime(true) / 1e6 - $this->requestStartMs;
 
         echo "\n";
 
@@ -155,17 +156,20 @@ final class Trace
     /** @return list<array<string, mixed>> */
     public function toArray(): array
     {
-        return array_map(fn(TraceEntry $e): array => [
-            'args' => $e->args(),
-            'depth' => $e->depth,
-            'error' => $e->error,
-            'subject' => $e->subject,
-            'type' => $e->type->value,
-            'location' => $e->location(),
-            'durationMs' => $e->durationMs,
-            'timestampMs' => $e->timestampMs,
-            'memoryBytes' => $e->memoryBytes,
-        ], $this->entries);
+        return array_map(
+            fn(TraceEntry $e): array => [
+                "args" => $e->args(),
+                "depth" => $e->depth,
+                "error" => $e->error,
+                "subject" => $e->subject,
+                "type" => $e->type->value,
+                "location" => $e->location(),
+                "durationMs" => $e->durationMs,
+                "timestampMs" => $e->timestampMs,
+                "memoryBytes" => $e->memoryBytes,
+            ],
+            $this->entries,
+        );
     }
 
     /** @return list<object> */
@@ -176,20 +180,23 @@ final class Trace
         }
 
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 10);
-        return array_map(fn(array $frame) => (object) [
-            'file' => $frame['file'] ?? 'unknown',
-            'lineNumber' => $frame['line'] ?? 0,
-        ], $trace);
+        return array_map(
+            fn(array $frame) => (object) [
+                "file" => $frame["file"] ?? "unknown",
+                "lineNumber" => $frame["line"] ?? 0,
+            ],
+            $trace,
+        );
     }
 
     private function printEntry(TraceEntry $entry): void
     {
         $time = $this->formatTime($entry->timestampMs);
         $type = $entry->type->value;
-        $indent = str_repeat('  ', $entry->depth);
+        $indent = str_repeat("  ", $entry->depth);
         $subject = $entry->subject;
 
-        $args = $entry->args() ? ' ' . $entry->args() : '';
+        $args = $entry->args() ? " " . $entry->args() : "";
         $parts = ["$time  $type  $indent$subject$args"];
 
         if ($entry->memoryBytes !== null) {
@@ -197,7 +204,7 @@ final class Trace
         }
 
         if ($entry->durationMs !== null) {
-            $parts[] = '+' . $this->formatDuration($entry->durationMs);
+            $parts[] = "+" . $this->formatDuration($entry->durationMs);
         }
 
         if ($entry->error) {
@@ -209,7 +216,7 @@ final class Trace
             $parts[] = $location;
         }
 
-        echo implode('  ', $parts) . "\n";
+        echo implode("  ", $parts) . "\n";
     }
 
     private function printFooter(float $totalMs): void
@@ -218,41 +225,41 @@ final class Trace
             "%d svc  %s peak  %d gc  %s total\n",
             $this->servicesCreated,
             $this->formatBytes($this->peakMemoryBytes),
-            gc_status()['runs'],
-            $this->formatDuration($totalMs)
+            gc_status()["runs"],
+            $this->formatDuration($totalMs),
         );
     }
 
     private function formatTime(float $ms): string
     {
         if ($ms >= 1000) {
-            return sprintf('%5.1fs', $ms / 1000);
+            return sprintf("%5.1fs", $ms / 1000);
         }
-        return sprintf('%5.0fms', $ms);
+        return sprintf("%5.0fms", $ms);
     }
 
     private function formatDuration(float $ms): string
     {
         if ($ms >= 1000) {
-            return sprintf('%.1fs', $ms / 1000);
+            return sprintf("%.1fs", $ms / 1000);
         }
         if ($ms >= 100) {
-            return sprintf('%.0fms', $ms);
+            return sprintf("%.0fms", $ms);
         }
         if ($ms >= 10) {
-            return sprintf('%.1fms', $ms);
+            return sprintf("%.1fms", $ms);
         }
-        return sprintf('%.2fms', $ms);
+        return sprintf("%.2fms", $ms);
     }
 
     private function formatBytes(int $bytes): string
     {
         if ($bytes >= 1024 * 1024) {
-            return sprintf('%.1fMB', $bytes / 1024 / 1024);
+            return sprintf("%.1fMB", $bytes / 1024 / 1024);
         }
         if ($bytes >= 1024) {
-            return sprintf('%.0fKB', $bytes / 1024);
+            return sprintf("%.0fKB", $bytes / 1024);
         }
-        return $bytes . 'B';
+        return $bytes . "B";
     }
 }

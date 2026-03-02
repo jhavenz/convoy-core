@@ -40,7 +40,7 @@ final class CancellationToken
     {
         $token = new self();
 
-        $token->timer = Loop::addTimer($seconds, function () use ($token): void {
+        $token->timer = Loop::addTimer($seconds, static function () use ($token): void {
             $token->cancel();
         });
 
@@ -57,7 +57,7 @@ final class CancellationToken
                 return $composite;
             }
 
-            $token->onCancel(function () use ($composite): void {
+            $token->onCancel(static function () use ($composite): void {
                 $composite->cancel();
             });
         }
@@ -73,7 +73,7 @@ final class CancellationToken
 
         $this->cancelled = true;
 
-        if ($this->timer instanceof \React\EventLoop\TimerInterface) {
+        if ($this->timer !== null) {
             Loop::cancelTimer($this->timer);
             $this->timer = null;
         }

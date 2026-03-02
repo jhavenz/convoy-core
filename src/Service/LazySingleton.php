@@ -12,7 +12,7 @@ final class LazySingleton
     /** @var array<string, object> */
     private array $instances = [];
 
-    /** @var list<string> Order of creation for disposal */
+    /** @var list<string> */
     private array $creationOrder = [];
 
     public function __construct(
@@ -144,7 +144,7 @@ final class LazySingleton
         $factory = $compiled->factory;
 
         if ($compiled->lazy) {
-            return LazyFactory::wrap($compiled->type, fn() => $factory(...$deps), $this->trace);
+            return LazyFactory::wrap($compiled->type, static fn() => $factory(...$deps), $this->trace);
         }
 
         $this->trace->log(TraceType::ServiceInit, $compiled->shortName());

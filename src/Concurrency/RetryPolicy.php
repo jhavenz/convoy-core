@@ -9,6 +9,9 @@ use Throwable;
 
 final readonly class RetryPolicy
 {
+    private const DEFAULT_BASE_DELAY_MS = 100.0;
+    private const DEFAULT_MAX_DELAY_MS = 30000.0;
+
     public function __construct(
         public int $attempts,
         public string $backoff,
@@ -27,16 +30,16 @@ final readonly class RetryPolicy
 
     public static function exponential(
         int $attempts,
-        float $baseDelayMs = 100.0,
-        float $maxDelayMs = 30000.0,
+        float $baseDelayMs = self::DEFAULT_BASE_DELAY_MS,
+        float $maxDelayMs = self::DEFAULT_MAX_DELAY_MS,
     ): self {
         return new self($attempts, 'exponential', $baseDelayMs, $maxDelayMs);
     }
 
     public static function linear(
         int $attempts,
-        float $baseDelayMs = 100.0,
-        float $maxDelayMs = 30000.0,
+        float $baseDelayMs = self::DEFAULT_BASE_DELAY_MS,
+        float $maxDelayMs = self::DEFAULT_MAX_DELAY_MS,
     ): self {
         return new self($attempts, 'linear', $baseDelayMs, $maxDelayMs);
     }
@@ -72,7 +75,7 @@ final readonly class RetryPolicy
             default => $this->baseDelayMs,
         };
 
-        $jitter = $delay * 0.1 * (mt_rand(0, 100) / 100);
+        $jitter = $delay * 0.1 * (random_int(0, 100) / 100);
 
         return min($delay + $jitter, $this->maxDelayMs);
     }

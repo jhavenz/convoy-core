@@ -6,6 +6,7 @@ namespace Convoy\Service;
 
 use Closure;
 use Convoy\Lifecycle\LifecycleCallbacks;
+use Convoy\Support\ClassNames;
 
 final readonly class ServiceDefinition
 {
@@ -174,7 +175,6 @@ final readonly class ServiceDefinition
 
     public function shortName(): string
     {
-        $parts = explode('\\', $this->type);
-        return end($parts);
+        return ClassNames::short($this->type);
     }
 }

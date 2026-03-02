@@ -7,13 +7,6 @@ namespace Convoy\Concurrency;
 use RuntimeException;
 use Throwable;
 
-/**
- * Outcome wrapper for settled tasks - captures success or failure.
- *
- * Unlike Result (control flow monad), Settlement represents a task that
- * has completed - either successfully or with an error. Used by settle()
- * to collect all outcomes without short-circuiting on failure.
- */
 final readonly class Settlement
 {
     private function __construct(
@@ -34,8 +27,6 @@ final readonly class Settlement
     }
 
     /**
-     * Extract the value, throwing if this is an error settlement.
-     *
      * @throws Throwable The original error if this settlement captured a failure
      */
     public function unwrap(): mixed
@@ -47,17 +38,11 @@ final readonly class Settlement
         return $this->value;
     }
 
-    /**
-     * Extract the value, returning the default if this is an error settlement.
-     */
     public function unwrapOr(mixed $default): mixed
     {
         return $this->isOk ? $this->value : $default;
     }
 
-    /**
-     * Get the error, or null if this is a success settlement.
-     */
     public function error(): ?Throwable
     {
         return $this->error;
