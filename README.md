@@ -389,12 +389,12 @@ CONVOY_TRACE=1 php server.php
     4ms  STRT  startup
     4ms  STRT  ready
     6ms  CON>    concurrent(2)
-    7ms  EXEC    FetchCustomer {id:42}  src/Scope.php:558
+    7ms  EXEC    FetchCustomer {id:42}
     8ms  DONE    FetchCustomer  +0.61ms
-    8ms  EXEC    ValidateInventory {items:[1]}  src/Scope.php:558
+    8ms  EXEC    ValidateInventory {items:[1]}
    19ms  DONE    ValidateInventory  +10.6ms
    19ms  CON<    concurrent(2) joined  +12.8ms
-   19ms  EXEC  GetShippingQuote {zip:"10001"}  4.0MB  src/Scope.php:558
+   19ms  EXEC  GetShippingQuote {zip:"10001"}  4.0MB
    40ms  DONE  GetShippingQuote  +20.9ms
 
 0 svc  4.0MB peak  0 gc  39.8ms total
@@ -412,10 +412,4 @@ $trace->print();
 
 ## What's Next
 
-This README covers the fundamentals. The codebase reveals more.
-
-**Dive into the source:** Types are co-located for readability (though breaking PSR). `Scope.php` contains both the `Scope` interface and `ExecutionScope` implementation—one file, one concept. Start there to understand how task execution actually works.
-
-**Watch the ecosystem:** Convoy core ships first. HTTP client abstractions, database connection pooling, and queue workers are in development. The foundation you learn here carries forward.
-
-**Project history:** Iterating since early 2025. Started on Amp, migrated to ReactPHP after evaluating tradeoffs. This isn't a weekend experiment—it's a deliberate pattern built from having tinkered with async PHP on nights and weekends, and informed by the lessons learned from patterns seen in other languages, frameworks, and the brilliant ideas/teaching that superceded them.
+HTTP client abstractions, database connection pooling, and queue workers are in development. The foundation you learn here carries forward.
