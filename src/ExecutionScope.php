@@ -126,7 +126,7 @@ final class ExecutionScope implements Scope
         $count = count($tasks);
         $resolve = $this->resolve(...);
 
-        return $this->traced("parallel($count)", static function () use ($tasks, $resolve): array {
+        return $this->traced("concurrent($count)", static function () use ($tasks, $resolve): array {
             $promises = [];
 
             foreach ($tasks as $key => $task) {
@@ -447,8 +447,8 @@ final class ExecutionScope implements Scope
             $this->trace->log(TraceType::ServiceDispose, $compiled->shortName());
         }
 
-        $this->scopedInstances = [];
         $this->creationOrder = [];
+        $this->scopedInstances = [];
         $this->disposeCallbacks = [];
     }
 
