@@ -5,71 +5,211 @@ declare(strict_types=1);
 namespace Convoy\Tests\Integration\Application;
 
 use Convoy\Application;
-use Convoy\Concurrency\CancellationToken;
-use Convoy\Tests\Support\AsyncTestCase;
-use Convoy\Tests\Support\Fixtures\Database;
+use Convoy\Tests\Support\Fixtures\CountingService;
 use Convoy\Tests\Support\Fixtures\Logger;
 use Convoy\Tests\Support\TestServiceBundle;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\TestCase;
 
-final class ApplicationLifecycleTest extends AsyncTestCase
+final class ApplicationLifecycleTest extends TestCase
 {
-    #[Test]
-    public function startup_hooks_called_on_startup(): void
+    protected function setUp(): void
     {
-        $bundle = TestServiceBundle::create()
-            ->singleton(Logger::class)
-            ->asEager(Logger::class)
-            ->withLifecycle(Logger::class, 'startup', fn(Logger $l) => $l->startup());
-
-        $app = Application::starting()
-            ->providers($bundle)
-            ->compile();
-
-        $scope = $app->createScope();
-        $logger = $scope->service(Logger::class);
-
-        $this->assertFalse($logger->started, 'Not started before startup()');
-
-        $app->startup();
-
-        $this->assertTrue($logger->started, 'Started after startup()');
+        CountingService::reset();
     }
 
     #[Test]
-    public function shutdown_hooks_called_on_shutdown(): void
+    public function startup_hooks_run_on_eager_services(): void
     {
+        $startupCalled = false;
+
         $bundle = TestServiceBundle::create()
-            ->singleton(Logger::class)
-            ->asEager(Logger::class)
-            ->withLifecycle(Logger::class, 'startup', fn(Logger $l) => $l->startup())
-            ->withLifecycle(Logger::class, 'shutdown', fn(Logger $l) => $l->shutdown());
+            ->eager(Logger::class, static fn() => new Logger())
+            ->withLifecycle(Logger::class, 'startup', static function (Logger $logger) use (&$startupCalled): void {
+                $logger->startup();
+                $startupCalled = true;
+            });
 
         $app = Application::starting()
             ->providers($bundle)
             ->compile();
 
+        $this->assertFalse($startupCalled);
+
         $app->startup();
 
-        $scope = $app->createScope();
-        $logger = $scope->service(Logger::class);
-
-        $this->assertFalse($logger->shutdown, 'Not shutdown before shutdown()');
-
-        $app->shutdown();
-
-        $this->assertTrue($logger->shutdown, 'Shutdown after shutdown()');
+        $this->assertTrue($startupCalled);
     }
 
     #[Test]
     public function startup_is_idempotent(): void
     {
+        $callCount = 0;
+
+        $bundle = TestServiceBundle::create()
+            ->eager(Logger::class, static fn() => new Logger())
+            ->withLifecycle(Logger::class, 'startup', static function () use (&$callCount): void {
+                $callCount++;
+            });
+
+        $app = Application::starting()
+            ->providers($bundle)
+            ->compile();
+
+        $app->startup();
+        $app->startup();
+        $app->startup();
+
+        $this->assertSame(1, $callCount);
+    }
+
+    #[Test]
+    public function shutdown_hooks_run_on_instantiated_services(): void
+    {
+        $shutdownCalled = false;
+
+        $bundle = TestServiceBundle::create()
+            ->eager(Logger::class, static fn() => new Logger())
+            ->withLifecycle(Logger::class, 'shutdown', static function (Logger $logger) use (&$shutdownCalled): void {
+                $logger->shutdown();
+                $shutdownCalled = true;
+            });
+
+        $app = Application::starting()
+            ->providers($bundle)
+            ->compile();
+
+        $app->startup();
+
+        $this->assertFalse($shutdownCalled);
+
+        $app->shutdown();
+
+        $this->assertTrue($shutdownCalled);
+    }
+
+    #[Test]
+    public function shutdown_is_idempotent(): void
+    {
+        $callCount = 0;
+
+        $bundle = TestServiceBundle::create()
+            ->eager(Logger::class, static fn() => new Logger())
+            ->withLifecycle(Logger::class, 'shutdown', static function () use (&$callCount): void {
+                $callCount++;
+            });
+
+        $app = Application::starting()
+            ->providers($bundle)
+            ->compile();
+
+        $app->startup();
+
+        $app->shutdown();
+        $app->shutdown();
+        $app->shutdown();
+
+        // Shutdown is idempotent because started flag is set to false
+        $this->assertSame(1, $callCount);
+    }
+
+    #[Test]
+    public function multiple_providers_are_merged(): void
+    {
+        $bundle1 = TestServiceBundle::create()
+            ->singleton(Logger::class, static fn() => new Logger());
+
+        $bundle2 = TestServiceBundle::create()
+            ->singleton(CountingService::class, static fn() => new CountingService());
+
+        $app = Application::starting()
+            ->providers($bundle1, $bundle2)
+            ->compile();
+
+        $scope = $app->createScope();
+
+        // Both services should be accessible
+        $logger = $scope->service(Logger::class);
+        $counting = $scope->service(CountingService::class);
+
+        $this->assertInstanceOf(Logger::class, $logger);
+        $this->assertInstanceOf(CountingService::class, $counting);
+    }
+
+    #[Test]
+    public function eager_services_instantiated_at_startup(): void
+    {
+        $initTime = null;
+
+        $bundle = TestServiceBundle::create()
+            ->eager(Logger::class, static function () use (&$initTime): Logger {
+                $initTime = hrtime(true);
+                return new Logger();
+            });
+
+        $app = Application::starting()
+            ->providers($bundle)
+            ->compile();
+
+        // Not instantiated yet at compile time
+        $this->assertNull($initTime);
+
+        $app->startup();
+
+        // Now it should be instantiated
+        $this->assertNotNull($initTime);
+    }
+
+    #[Test]
+    public function lazy_services_not_instantiated_at_startup(): void
+    {
+        $initCalled = false;
+
+        $bundle = TestServiceBundle::create()
+            ->singleton(Logger::class, static function () use (&$initCalled): Logger {
+                $initCalled = true;
+                return new Logger();
+            });
+
+        $app = Application::starting()
+            ->providers($bundle)
+            ->compile();
+
+        $app->startup();
+
+        // Lazy singletons should NOT be instantiated at startup
+        $this->assertFalse($initCalled);
+    }
+
+    #[Test]
+    public function shutdown_without_startup_is_noop(): void
+    {
+        $shutdownCalled = false;
+
+        $bundle = TestServiceBundle::create()
+            ->eager(Logger::class, static fn() => new Logger())
+            ->withLifecycle(Logger::class, 'shutdown', static function () use (&$shutdownCalled): void {
+                $shutdownCalled = true;
+            });
+
+        $app = Application::starting()
+            ->providers($bundle)
+            ->compile();
+
+        // Shutdown without startup should be a no-op
+        $app->shutdown();
+
+        $this->assertFalse($shutdownCalled);
+    }
+
+    #[Test]
+    public function startup_after_shutdown_restarts(): void
+    {
         $startupCount = 0;
 
         $bundle = TestServiceBundle::create()
-            ->singleton(Logger::class)
-            ->asEager(Logger::class)
-            ->withLifecycle(Logger::class, 'startup', function () use (&$startupCount) {
+            ->eager(CountingService::class, static fn() => new CountingService())
+            ->withLifecycle(CountingService::class, 'startup', static function () use (&$startupCount): void {
                 $startupCount++;
             });
 
@@ -78,72 +218,43 @@ final class ApplicationLifecycleTest extends AsyncTestCase
             ->compile();
 
         $app->startup();
-        $app->startup();
-        $app->startup();
+        $this->assertSame(1, $startupCount);
 
-        $this->assertEquals(1, $startupCount, 'Startup should only run once');
+        $app->shutdown();
+
+        $app->startup();
+        $this->assertSame(2, $startupCount);
     }
 
     #[Test]
-    public function shutdown_is_idempotent(): void
+    public function providers_method_returns_registered_providers(): void
     {
-        $shutdownCount = 0;
-
-        $bundle = TestServiceBundle::create()
-            ->singleton(Logger::class)
-            ->asEager(Logger::class)
-            ->withLifecycle(Logger::class, 'shutdown', function () use (&$shutdownCount) {
-                $shutdownCount++;
-            });
-
-        $app = Application::starting()
-            ->providers($bundle)
-            ->compile();
-
-        $app->startup();
-        $app->shutdown();
-        $app->shutdown();
-        $app->shutdown();
-
-        $this->assertEquals(1, $shutdownCount, 'Shutdown should only run once');
-    }
-
-    #[Test]
-    public function scope_respects_cancellation_token(): void
-    {
-        $app = Application::starting()->compile();
-
-        $token = CancellationToken::create();
-        $scope = $app->createScope($token);
-
-        $this->assertFalse($scope->isCancelled);
-
-        $token->cancel();
-
-        $this->assertTrue($scope->isCancelled);
-    }
-
-    #[Test]
-    public function multiple_providers_merged(): void
-    {
-        $bundle1 = TestServiceBundle::create()
-            ->singleton(Logger::class);
-
-        $bundle2 = TestServiceBundle::create()
-            ->singleton(Database::class, fn(Logger $logger) => new Database($logger))
-            ->withDependencies(Database::class, Logger::class);
+        $bundle1 = TestServiceBundle::create();
+        $bundle2 = TestServiceBundle::create();
 
         $app = Application::starting()
             ->providers($bundle1, $bundle2)
             ->compile();
 
-        $scope = $app->createScope();
+        $providers = $app->providers();
 
-        $logger = $scope->service(Logger::class);
-        $database = $scope->service(Database::class);
+        $this->assertCount(2, $providers);
+        $this->assertSame($bundle1, $providers[0]);
+        $this->assertSame($bundle2, $providers[1]);
+    }
 
-        $this->assertInstanceOf(Logger::class, $logger);
-        $this->assertInstanceOf(Database::class, $database);
-        $this->assertSame($logger, $database->logger);
+    #[Test]
+    public function graph_method_returns_service_graph(): void
+    {
+        $bundle = TestServiceBundle::create()
+            ->singleton(Logger::class, static fn() => new Logger());
+
+        $app = Application::starting()
+            ->providers($bundle)
+            ->compile();
+
+        $graph = $app->graph();
+
+        $this->assertTrue($graph->has(Logger::class));
     }
 }

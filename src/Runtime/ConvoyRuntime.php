@@ -10,11 +10,13 @@ use Symfony\Component\Runtime\RunnerInterface;
 
 final class ConvoyRuntime extends GenericRuntime
 {
-    private string $host;
-    private int $port;
-    private float $requestTimeout;
+    private readonly string $host;
+    private readonly int $port;
+    private readonly float $requestTimeout;
 
-    /** @param array<string, mixed> $options */
+    /**
+     * @param array<string, mixed> $options
+     */
     public function __construct(array $options = [])
     {
         $this->host = (string) ($options['host'] ?? $options['CONVOY_HOST'] ?? '0.0.0.0');

@@ -14,6 +14,8 @@ final readonly class LifecycleCallbacks
         /** @var list<Closure> */
         public array $onStartup = [],
         /** @var list<Closure> */
+        public array $onReady = [],
+        /** @var list<Closure> */
         public array $onDispose = [],
         /** @var list<Closure> */
         public array $onShutdown = [],
@@ -26,24 +28,35 @@ final readonly class LifecycleCallbacks
             'init', 'onInit' => new self(
                 [...$this->onInit, $hook],
                 $this->onStartup,
+                $this->onReady,
                 $this->onDispose,
                 $this->onShutdown,
             ),
             'startup', 'onStartup' => new self(
                 $this->onInit,
                 [...$this->onStartup, $hook],
+                $this->onReady,
+                $this->onDispose,
+                $this->onShutdown,
+            ),
+            'ready', 'onReady' => new self(
+                $this->onInit,
+                $this->onStartup,
+                [...$this->onReady, $hook],
                 $this->onDispose,
                 $this->onShutdown,
             ),
             'dispose', 'onDispose' => new self(
                 $this->onInit,
                 $this->onStartup,
+                $this->onReady,
                 [...$this->onDispose, $hook],
                 $this->onShutdown,
             ),
             'shutdown', 'onShutdown' => new self(
                 $this->onInit,
                 $this->onStartup,
+                $this->onReady,
                 $this->onDispose,
                 [...$this->onShutdown, $hook],
             ),
@@ -61,6 +74,11 @@ final readonly class LifecycleCallbacks
         return count($this->onStartup) > 0;
     }
 
+    public function hasReady(): bool
+    {
+        return count($this->onReady) > 0;
+    }
+
     public function hasDispose(): bool
     {
         return count($this->onDispose) > 0;
@@ -76,6 +94,7 @@ final readonly class LifecycleCallbacks
         return new self(
             [...$this->onInit, ...$other->onInit],
             [...$this->onStartup, ...$other->onStartup],
+            [...$this->onReady, ...$other->onReady],
             [...$this->onDispose, ...$other->onDispose],
             [...$this->onShutdown, ...$other->onShutdown],
         );

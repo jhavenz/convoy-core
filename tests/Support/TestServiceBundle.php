@@ -20,6 +20,11 @@ final class TestServiceBundle implements ServiceBundle
     /** @var array<string, Closure> */
     private array $configs = [];
 
+    public static function create(): self
+    {
+        return new self();
+    }
+
     public function singleton(string $type, ?Closure $factory = null): self
     {
         $this->registrations[] = function (ServiceCatalog $catalog) use ($type, $factory): void {
@@ -133,10 +138,5 @@ final class TestServiceBundle implements ServiceBundle
         foreach ($this->configs as $type => $fromContext) {
             $services->config($type, $fromContext);
         }
-    }
-
-    public static function create(): self
-    {
-        return new self();
     }
 }

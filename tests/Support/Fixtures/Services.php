@@ -94,42 +94,42 @@ final class UserRepository implements UserRepositoryInterface
     }
 }
 
-final class ServiceA
+final readonly class ServiceA
 {
     public function __construct(
-        public readonly ServiceB $b,
+        public ServiceB $b,
     ) {
     }
 }
 
-final class ServiceB
+final readonly class ServiceB
 {
     public function __construct(
-        public readonly ServiceA $a,
+        public ServiceA $a,
     ) {
     }
 }
 
-final class ServiceC
+final readonly class ServiceC
 {
     public function __construct(
-        public readonly ServiceD $d,
+        public ServiceD $d,
     ) {
     }
 }
 
-final class ServiceD
+final readonly class ServiceD
 {
     public function __construct(
-        public readonly ServiceE $e,
+        public ServiceE $e,
     ) {
     }
 }
 
-final class ServiceE
+final readonly class ServiceE
 {
     public function __construct(
-        public readonly ServiceC $c,
+        public ServiceC $c,
     ) {
     }
 }
@@ -144,10 +144,10 @@ final class IndependentService
     }
 }
 
-final class SingletonWithScopedDep
+final readonly class SingletonWithScopedDep
 {
     public function __construct(
-        public readonly ScopedService $scoped,
+        public ScopedService $scoped,
     ) {
     }
 }
@@ -190,6 +190,17 @@ final class SlowService
     }
 }
 
+// Non-final for lazy ghost testing
+class LazyableService
+{
+    public bool $initialized = false;
+
+    public function initialize(): void
+    {
+        $this->initialized = true;
+    }
+}
+
 final class DisposalTracker
 {
     /** @var list<string> */
@@ -218,10 +229,10 @@ final class TrackedServiceA
     }
 }
 
-final class TrackedServiceB
+final readonly class TrackedServiceB
 {
     public function __construct(
-        public readonly TrackedServiceA $a,
+        public TrackedServiceA $a,
     ) {
     }
 
@@ -231,10 +242,10 @@ final class TrackedServiceB
     }
 }
 
-final class TrackedServiceC
+final readonly class TrackedServiceC
 {
     public function __construct(
-        public readonly TrackedServiceB $b,
+        public TrackedServiceB $b,
     ) {
     }
 

@@ -25,26 +25,6 @@ final class SettlementBag implements ArrayAccess, IteratorAggregate, Countable
     private(set) array $cachedErrors;
 
     /**
-     * @param array<string|int, Settlement> $settlements
-     */
-    public function __construct(
-        private(set) readonly array $settlements,
-    ) {
-        $values = [];
-        $errors = [];
-        foreach ($settlements as $key => $settlement) {
-            if ($settlement->isOk) {
-                $values[$key] = $settlement->value;
-            } else {
-                $errors[$key] = $settlement->error;
-            }
-        }
-
-        $this->cachedValues = $values;
-        $this->cachedErrors = $errors;
-    }
-
-    /**
      * All successful values keyed by original key.
      *
      * @return array<string|int, mixed>
@@ -106,6 +86,26 @@ final class SettlementBag implements ArrayAccess, IteratorAggregate, Countable
      */
     public array $errKeys {
         get => array_keys($this->cachedErrors);
+    }
+
+    /**
+     * @param array<string|int, Settlement> $settlements
+     */
+    public function __construct(
+        private(set) readonly array $settlements,
+    ) {
+        $values = [];
+        $errors = [];
+        foreach ($settlements as $key => $settlement) {
+            if ($settlement->isOk) {
+                $values[$key] = $settlement->value;
+            } else {
+                $errors[$key] = $settlement->error;
+            }
+        }
+
+        $this->cachedValues = $values;
+        $this->cachedErrors = $errors;
     }
 
     /**

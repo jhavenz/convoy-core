@@ -9,6 +9,7 @@ use Convoy\Concurrency\CancellationToken;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Concurrency\SettlementBag;
 use Convoy\Scope;
+use Convoy\Task\Dispatchable;
 use Convoy\Trace\Trace;
 use RuntimeException;
 
@@ -23,18 +24,18 @@ final class DeferredScope implements Scope
         return $this->scope()->service($type);
     }
 
-    public function resolve(callable $task): mixed
+    public function execute(Dispatchable $task): mixed
     {
-        return $this->scope()->resolve($task);
+        return $this->scope()->execute($task);
     }
 
-    public function resolveFresh(callable $task): mixed
+    public function executeFresh(Dispatchable $task): mixed
     {
-        return $this->scope()->resolveFresh($task);
+        return $this->scope()->executeFresh($task);
     }
 
     /**
-     * @param array<string|int, callable(Scope): mixed> $tasks
+     * @param array<string|int, Dispatchable> $tasks
      * @return array<string|int, mixed>
      */
     public function concurrent(array $tasks): array
@@ -42,13 +43,13 @@ final class DeferredScope implements Scope
         return $this->scope()->concurrent($tasks);
     }
 
-    /** @param array<string|int, callable(Scope): mixed> $tasks */
+    /** @param array<string|int, Dispatchable> $tasks */
     public function race(array $tasks): mixed
     {
         return $this->scope()->race($tasks);
     }
 
-    /** @param array<string|int, callable(Scope): mixed> $tasks */
+    /** @param array<string|int, Dispatchable> $tasks */
     public function any(array $tasks): mixed
     {
         return $this->scope()->any($tasks);
@@ -58,13 +59,13 @@ final class DeferredScope implements Scope
      * @param array<string|int, mixed> $items
      * @return array<string|int, mixed>
      */
-    public function map(array $items, callable $fn, int $limit = 10): array
+    public function map(array $items, Closure $fn, int $limit = 10): array
     {
         return $this->scope()->map($items, $fn, $limit);
     }
 
     /**
-     * @param list<callable(Scope): mixed> $tasks
+     * @param list<Dispatchable> $tasks
      * @return list<mixed>
      */
     public function series(array $tasks): array
@@ -82,7 +83,7 @@ final class DeferredScope implements Scope
         $this->scope()->delay($seconds);
     }
 
-    public function retry(callable $task, RetryPolicy $policy): mixed
+    public function retry(Dispatchable $task, RetryPolicy $policy): mixed
     {
         return $this->scope()->retry($task, $policy);
     }
@@ -92,7 +93,7 @@ final class DeferredScope implements Scope
         return $this->scope()->settle($tasks);
     }
 
-    public function timeout(float $seconds, callable $task): mixed
+    public function timeout(float $seconds, Dispatchable $task): mixed
     {
         return $this->scope()->timeout($seconds, $task);
     }
@@ -120,6 +121,21 @@ final class DeferredScope implements Scope
     public function trace(): Trace
     {
         return $this->scope()->trace();
+    }
+
+    public function defer(Dispatchable $task): void
+    {
+        $this->scope()->defer($task);
+    }
+
+    public function withAttribute(string $key, mixed $value): Scope
+    {
+        return $this->scope()->withAttribute($key, $value);
+    }
+
+    public function attribute(string $key, mixed $default = null): mixed
+    {
+        return $this->scope()->attribute($key, $default);
     }
 
     private function scope(): Scope

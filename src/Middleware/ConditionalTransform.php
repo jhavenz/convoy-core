@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Convoy\Middleware;
 
-use Convoy\Service\ServiceDefinition;
-
-interface ConditionalTransform extends ServiceTransform
+/**
+ * @deprecated Use ConditionalTransformationMiddleware instead
+ */
+interface ConditionalTransform extends ConditionalTransformationMiddleware
 {
-    public function applies(ServiceDefinition $def): bool;
 }

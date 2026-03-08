@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Convoy;
 
 use Convoy\Concurrency\CancellationToken;
-use Convoy\Middleware\TaskInterceptor;
+use Convoy\Middleware\TaskMiddleware;
 use Convoy\Service\LazySingleton;
 use Convoy\Service\ServiceBundle;
 use Convoy\Service\ServiceGraph;
+use Convoy\Task\ManagedResource;
 use Convoy\Trace\Trace;
 
 final class Application implements AppHost
@@ -28,7 +29,7 @@ final class Application implements AppHost
 
     /**
      * @param list<ServiceBundle> $providers
-     * @param list<TaskInterceptor> $taskInterceptors
+     * @param list<TaskMiddleware> $taskInterceptors
      */
     public static function create(
         ServiceGraph $graph,
@@ -70,6 +71,7 @@ final class Application implements AppHost
         }
 
         $this->started = true;
+        ManagedResource::enableShutdownFlush();
         $this->singletons->startup();
     }
 

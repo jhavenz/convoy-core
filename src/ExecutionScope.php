@@ -9,7 +9,6 @@ use Convoy\Concurrency\CancellationToken;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Concurrency\Settlement;
 use Convoy\Concurrency\SettlementBag;
-use Convoy\Middleware\TaskInterceptor;
 use Convoy\Service\CompiledService;
 use Convoy\Service\DeferredScope;
 use Convoy\Service\FiberScopeRegistry;
@@ -17,6 +16,13 @@ use Convoy\Service\LazyFactory;
 use Convoy\Service\LazySingleton;
 use Convoy\Service\ServiceGraph;
 use Convoy\Support\ClassNames;
+use Convoy\Task\Dispatchable;
+use Convoy\Task\HasPriority;
+use Convoy\Task\HasTimeout;
+use Convoy\Task\Retryable;
+use Convoy\Task\TaskConfig;
+use Convoy\Task\Traceable;
+use Convoy\Task\UsesPool;
 use Convoy\Trace\Trace;
 use Convoy\Trace\TraceType;
 use React\Promise\Deferred;
@@ -34,16 +40,16 @@ final class ExecutionScope implements Scope
         get => $this->cancellation->isCancelled;
     }
 
+    private bool $disposed = false;
+
+    /** @var list<string> */
+    private array $creationOrder = [];
+
     /** @var array<string, object> */
     private array $scopedInstances = [];
 
     /** @var list<Closure> */
     private array $disposeCallbacks = [];
-
-    /** @var list<string> */
-    private array $creationOrder = [];
-
-    private bool $disposed = false;
 
     public function __construct(
         private readonly ServiceGraph $graph,
@@ -52,6 +58,8 @@ final class ExecutionScope implements Scope
         private readonly Trace $trace,
         /** @var list<TaskInterceptor> */
         private readonly array $taskInterceptors = [],
+        /** @var array<string, mixed> */
+        private array $attributes = []
     ) {
     }
 
@@ -83,20 +91,20 @@ final class ExecutionScope implements Scope
         return $instance;
     }
 
-    public function resolve(callable $task): mixed
+    public function execute(Dispatchable $task): mixed
     {
         $this->throwIfCancelled();
 
         FiberScopeRegistry::register($this);
 
         try {
-            return $this->executeTask($task);
+            return $this->executeWithBehavior($task);
         } finally {
             FiberScopeRegistry::unregister();
         }
     }
 
-    public function resolveFresh(callable $task): mixed
+    public function executeFresh(Dispatchable $task): mixed
     {
         $this->throwIfCancelled();
 
@@ -106,17 +114,18 @@ final class ExecutionScope implements Scope
             $this->cancellation,
             $this->trace,
             $this->taskInterceptors,
+            $this->attributes,
         );
 
         try {
-            return $childScope->resolve($task);
+            return $childScope->execute($task);
         } finally {
             $childScope->dispose();
         }
     }
 
     /**
-     * @param array<string|int, callable(Scope): mixed> $tasks
+     * @param array<string|int, Dispatchable> $tasks
      * @return array<string|int, mixed>
      */
     public function concurrent(array $tasks): array
@@ -124,51 +133,51 @@ final class ExecutionScope implements Scope
         $this->throwIfCancelled();
 
         $count = count($tasks);
-        $resolve = $this->resolve(...);
+        $execute = $this->execute(...);
 
-        return $this->traced("concurrent($count)", static function () use ($tasks, $resolve): array {
+        return $this->traced("concurrent($count)", static function () use ($tasks, $execute): array {
             $promises = [];
 
             foreach ($tasks as $key => $task) {
-                $promises[$key] = async(static fn(): mixed => $resolve($task))();
+                $promises[$key] = async(static fn(): mixed => $execute($task))();
             }
 
             return await(all($promises));
         });
     }
 
-    /** @param array<string|int, callable(Scope): mixed> $tasks */
+    /** @param array<string|int, Dispatchable> $tasks */
     public function race(array $tasks): mixed
     {
         $this->throwIfCancelled();
 
         $count = count($tasks);
-        $resolve = $this->resolve(...);
+        $execute = $this->execute(...);
 
-        return $this->traced("race($count)", static function () use ($tasks, $resolve): mixed {
+        return $this->traced("race($count)", static function () use ($tasks, $execute): mixed {
             $promises = [];
 
             foreach ($tasks as $task) {
-                $promises[] = async(static fn(): mixed => $resolve($task))();
+                $promises[] = async(static fn(): mixed => $execute($task))();
             }
 
             return await(race($promises));
         });
     }
 
-    /** @param array<string|int, callable(Scope): mixed> $tasks */
+    /** @param array<string|int, Dispatchable> $tasks */
     public function any(array $tasks): mixed
     {
         $this->throwIfCancelled();
 
         $count = count($tasks);
-        $resolve = $this->resolve(...);
+        $execute = $this->execute(...);
 
-        return $this->traced("any($count)", static function () use ($tasks, $resolve): mixed {
+        return $this->traced("any($count)", static function () use ($tasks, $execute): mixed {
             $promises = [];
 
             foreach ($tasks as $task) {
-                $promises[] = async(static fn(): mixed => $resolve($task))();
+                $promises[] = async(static fn(): mixed => $execute($task))();
             }
 
             return await(any($promises));
@@ -179,7 +188,7 @@ final class ExecutionScope implements Scope
      * @param array<string|int, mixed> $items
      * @return array<string|int, mixed>
      */
-    public function map(array $items, callable $fn, int $limit = 10): array
+    public function map(array $items, Closure $fn, int $limit = 10): array
     {
         $this->throwIfCancelled();
 
@@ -191,7 +200,7 @@ final class ExecutionScope implements Scope
         $results = [];
         $pending = [];
         $keys = array_keys($items);
-        $resolve = $this->resolve(...);
+        $execute = $this->execute(...);
         $cancellation = $this->cancellation;
 
         $startNext = static function () use (
@@ -202,7 +211,7 @@ final class ExecutionScope implements Scope
             $items,
             $fn,
             $limit,
-            $resolve,
+            $execute,
             $cancellation,
         ): void {
             while (count($pending) < $limit && $index < count($keys)) {
@@ -222,11 +231,11 @@ final class ExecutionScope implements Scope
                     &$results,
                     &$pending,
                     $deferred,
-                    $resolve,
+                    $execute,
                 ): void {
                     try {
                         $task = $fn($item);
-                        $results[$currentKey] = $resolve($task);
+                        $results[$currentKey] = $execute($task);
                         $deferred->resolve(null);
                     } catch (\Throwable $e) {
                         $deferred->reject($e);
@@ -261,7 +270,7 @@ final class ExecutionScope implements Scope
     }
 
     /**
-     * @param list<callable(Scope): mixed> $tasks
+     * @param list<Dispatchable> $tasks
      * @return list<mixed>
      */
     public function series(array $tasks): array
@@ -270,7 +279,7 @@ final class ExecutionScope implements Scope
 
         $results = [];
         foreach ($tasks as $task) {
-            $results[] = $this->resolve($task);
+            $results[] = $this->execute($task);
         }
 
         return $results;
@@ -282,7 +291,8 @@ final class ExecutionScope implements Scope
 
         $result = null;
         foreach ($tasks as $task) {
-            $result = $this->resolve(fn($scope) => $task($scope, $result));
+            $scope = $this->withAttribute('_waterfall_previous', $result);
+            $result = $scope->execute($task);
         }
 
         return $result;
@@ -294,7 +304,7 @@ final class ExecutionScope implements Scope
         delay($seconds);
     }
 
-    public function retry(callable $task, RetryPolicy $policy): mixed
+    public function retry(Dispatchable $task, RetryPolicy $policy): mixed
     {
         $attempt = 0;
         $lastException = null;
@@ -305,7 +315,7 @@ final class ExecutionScope implements Scope
             $attempt++;
 
             try {
-                return $this->resolve($task);
+                return $this->execute($task);
             } catch (\Throwable $e) {
                 $lastException = $e;
 
@@ -331,15 +341,15 @@ final class ExecutionScope implements Scope
         $start = hrtime(true);
         $this->trace->log(TraceType::ConcurrentStart, "settle($count)");
 
-        $resolve = $this->resolve(...);
+        $execute = $this->execute(...);
         $settlements = [];
         $promises = [];
 
         foreach ($tasks as $key => $task) {
             $currentKey = $key;
-            $promises[$key] = async(static function () use ($task, $currentKey, &$settlements, $resolve): void {
+            $promises[$key] = async(static function () use ($task, $currentKey, &$settlements, $execute): void {
                 try {
-                    $result = $resolve($task);
+                    $result = $execute($task);
                     $settlements[$currentKey] = Settlement::ok($result);
                 } catch (\Throwable $e) {
                     $settlements[$currentKey] = Settlement::err($e);
@@ -360,7 +370,7 @@ final class ExecutionScope implements Scope
         return new SettlementBag($ordered);
     }
 
-    public function timeout(float $seconds, callable $task): mixed
+    public function timeout(float $seconds, Dispatchable $task): mixed
     {
         $this->throwIfCancelled();
 
@@ -373,11 +383,10 @@ final class ExecutionScope implements Scope
             $token,
             $this->trace,
             $this->taskInterceptors,
+            $this->attributes,
         );
 
-        $taskPromise = async(static function () use ($childScope, $task) {
-            return $childScope->resolve($task);
-        })();
+        $taskPromise = async(static fn() => $childScope->execute($task))();
 
         $timeoutPromise = new \React\Promise\Promise(static function ($resolve, $reject) use ($timeoutToken): void {
             $timeoutToken->onCancel(static function () use ($reject): void {
@@ -457,6 +466,182 @@ final class ExecutionScope implements Scope
         return $this->trace;
     }
 
+    public function defer(Dispatchable $task): void
+    {
+        $this->throwIfCancelled();
+
+        $execute = $this->execute(...);
+
+        async(static function () use ($task, $execute): void {
+            try {
+                $execute($task);
+            } catch (\Throwable $e) {
+                error_log("Deferred task failed: " . $e->getMessage());
+            }
+        })();
+    }
+
+    public function withAttribute(string $key, mixed $value): Scope
+    {
+        $attributes = $this->attributes;
+        $attributes[$key] = $value;
+
+        return new ExecutionScope(
+            $this->graph,
+            $this->singletons,
+            $this->cancellation,
+            $this->trace,
+            $this->taskInterceptors,
+            $attributes,
+        );
+    }
+
+    public function attribute(string $key, mixed $default = null): mixed
+    {
+        return $this->attributes[$key] ?? $default;
+    }
+
+    private function executeWithBehavior(Dispatchable $task): mixed
+    {
+        $config = $this->resolveTaskConfig($task);
+
+        $work = fn(): mixed => $this->executeCore($task);
+
+        if ($config->timeout !== null) {
+            $timeout = $config->timeout;
+            $inner = $work;
+            $work = fn(): mixed => $this->executeTimeout($timeout, $inner);
+        }
+
+        if ($config->retry !== null) {
+            $policy = $config->retry;
+            $inner = $work;
+            $work = fn(): mixed => $this->executeRetry($inner, $policy);
+        }
+
+        if ($config->trace && $config->name !== '') {
+            $name = $config->name;
+            $inner = $work;
+            $work = fn(): mixed => $this->traced($name, $inner);
+        }
+
+        return $work();
+    }
+
+    private function executeCore(Dispatchable $task): mixed
+    {
+        $name = $this->taskName($task);
+        $start = hrtime(true);
+
+        $this->trace->log(TraceType::Executing, $name, task: $task);
+
+        $pipeline = fn() => $task($this);
+
+        foreach (array_reverse($this->taskInterceptors) as $mw) {
+            $next = $pipeline;
+            $pipeline = fn() => $mw->process($task, $this, $next);
+        }
+
+        try {
+            $result = $pipeline();
+            $elapsed = (hrtime(true) - $start) / 1e6;
+            $this->trace->log(TraceType::Done, $name, ['elapsed' => $elapsed]);
+            return $result;
+        } catch (\Throwable $e) {
+            $elapsed = (hrtime(true) - $start) / 1e6;
+            $this->trace->log(TraceType::Failed, $name, ['elapsed' => $elapsed, 'error' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
+    private function executeTimeout(float $seconds, callable $work): mixed
+    {
+        $timeoutToken = CancellationToken::timeout($seconds);
+        $token = CancellationToken::composite($this->cancellation, $timeoutToken);
+
+        $childScope = new ExecutionScope(
+            $this->graph,
+            $this->singletons,
+            $token,
+            $this->trace,
+            $this->taskInterceptors,
+            $this->attributes,
+        );
+
+        $taskPromise = async(static fn() => $work())();
+
+        $timeoutPromise = new \React\Promise\Promise(static function ($_, $reject) use ($timeoutToken): void {
+            $timeoutToken->onCancel(static function () use ($reject): void {
+                $reject(new \Convoy\Exception\CancelledException('Timeout exceeded'));
+            });
+        });
+
+        try {
+            return await(race([$taskPromise, $timeoutPromise]));
+        } finally {
+            $childScope->dispose();
+        }
+    }
+
+    private function executeRetry(callable $work, RetryPolicy $policy): mixed
+    {
+        $attempt = 0;
+        $lastException = null;
+
+        while ($attempt < $policy->attempts) {
+            $this->throwIfCancelled();
+            $attempt++;
+
+            try {
+                return $work();
+            } catch (\Throwable $e) {
+                $lastException = $e;
+
+                if (!$policy->shouldRetry($e) || $attempt >= $policy->attempts) {
+                    throw $e;
+                }
+
+                $delayMs = $policy->calculateDelay($attempt);
+                $this->trace->log(TraceType::Retry, "attempt $attempt", ['delay' => $delayMs]);
+
+                $this->delay($delayMs / 1000);
+            }
+        }
+
+        throw $lastException ?? new \RuntimeException("Retry exhausted");
+    }
+
+    private function resolveTaskConfig(Dispatchable $task): TaskConfig
+    {
+        if (property_exists($task, 'config') && $task->config instanceof TaskConfig) {
+            return $task->config;
+        }
+
+        $config = new TaskConfig();
+
+        if ($task instanceof Retryable) {
+            $config = $config->with(retry: $task->retryPolicy);
+        }
+
+        if ($task instanceof HasTimeout) {
+            $config = $config->with(timeout: $task->timeout);
+        }
+
+        if ($task instanceof Traceable) {
+            $config = $config->with(name: $task->traceName);
+        }
+
+        if ($task instanceof UsesPool) {
+            $config = $config->with(pool: $task->pool);
+        }
+
+        if ($task instanceof HasPriority) {
+            $config = $config->with(priority: $task->priority);
+        }
+
+        return $config;
+    }
+
     /**
      * @template T
      * @param callable(): T $operation
@@ -502,53 +687,12 @@ final class ExecutionScope implements Scope
         return $instance;
     }
 
-    private function executeTask(callable $task): mixed
+    private function taskName(Dispatchable $task): string
     {
-        $name = $this->taskName($task);
-        $start = hrtime(true);
-
-        $taskObj = is_object($task) ? $task : null;
-        $this->trace->log(TraceType::Executing, $name, task: $taskObj);
-
-        $pipeline = fn() => $task($this);
-
-        if ($taskObj !== null) {
-            foreach (array_reverse($this->taskInterceptors) as $mw) {
-                $next = $pipeline;
-                $pipeline = fn() => $mw->process($taskObj, $this, $next);
-            }
+        if ($task instanceof Traceable) {
+            return $task->traceName;
         }
 
-        try {
-            $result = $pipeline();
-            $elapsed = (hrtime(true) - $start) / 1e6;
-            $this->trace->log(TraceType::Done, $name, ['elapsed' => $elapsed]);
-            return $result;
-        } catch (\Throwable $e) {
-            $elapsed = (hrtime(true) - $start) / 1e6;
-            $this->trace->log(TraceType::Failed, $name, ['elapsed' => $elapsed, 'error' => $e->getMessage()]);
-            throw $e;
-        }
-    }
-
-    private function taskName(callable $task): string
-    {
-        if ($task instanceof \Closure) {
-            $ref = new \ReflectionFunction($task);
-            $file = basename($ref->getFileName() ?: 'unknown');
-            $line = $ref->getStartLine();
-            return "Closure@$file:$line";
-        }
-
-        if (is_object($task)) {
-            return ClassNames::short($task::class);
-        }
-
-        if (is_array($task)) {
-            $class = is_object($task[0]) ? $task[0]::class : $task[0];
-            return ClassNames::short($class) . '::' . $task[1];
-        }
-
-        return 'Closure';
+        return ClassNames::short($task::class);
     }
 }

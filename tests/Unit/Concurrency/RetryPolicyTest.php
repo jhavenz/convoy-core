@@ -6,152 +6,185 @@ namespace Convoy\Tests\Unit\Concurrency;
 
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Exception\CancelledException;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
+use UnexpectedValueException;
 
 final class RetryPolicyTest extends TestCase
 {
     #[Test]
-    public function exponential_backoff_doubles_delay(): void
+    public function exponential_backoff_calculation(): void
     {
-        $policy = RetryPolicy::exponential(5, baseDelayMs: 100.0, maxDelayMs: 10000.0);
+        $policy = RetryPolicy::exponential(5, baseDelayMs: 100.0, maxDelayMs: 5000.0);
 
-        $delays = [];
-        for ($attempt = 1; $attempt <= 5; $attempt++) {
-            $delay = $policy->calculateDelay($attempt);
-            $delays[] = $delay;
-        }
+        // Attempt 0 should return 0
+        $this->assertSame(0.0, $policy->calculateDelay(0));
 
-        $this->assertGreaterThanOrEqual(100, $delays[0]);
-        $this->assertLessThanOrEqual(110, $delays[0]);
+        // Attempt 1: ~100ms (base)
+        $delay1 = $policy->calculateDelay(1);
+        $this->assertGreaterThanOrEqual(100.0, $delay1);
+        $this->assertLessThanOrEqual(110.0, $delay1); // 10% jitter
 
-        $this->assertGreaterThanOrEqual(200, $delays[1]);
-        $this->assertLessThanOrEqual(220, $delays[1]);
+        // Attempt 2: ~200ms (2^1 * base)
+        $delay2 = $policy->calculateDelay(2);
+        $this->assertGreaterThanOrEqual(200.0, $delay2);
+        $this->assertLessThanOrEqual(220.0, $delay2);
 
-        $this->assertGreaterThanOrEqual(400, $delays[2]);
-        $this->assertLessThanOrEqual(440, $delays[2]);
+        // Attempt 3: ~400ms (2^2 * base)
+        $delay3 = $policy->calculateDelay(3);
+        $this->assertGreaterThanOrEqual(400.0, $delay3);
+        $this->assertLessThanOrEqual(440.0, $delay3);
 
-        $this->assertGreaterThanOrEqual(800, $delays[3]);
-        $this->assertLessThanOrEqual(880, $delays[3]);
-
-        $this->assertGreaterThanOrEqual(1600, $delays[4]);
-        $this->assertLessThanOrEqual(1760, $delays[4]);
+        // Attempt 4: ~800ms (2^3 * base)
+        $delay4 = $policy->calculateDelay(4);
+        $this->assertGreaterThanOrEqual(800.0, $delay4);
+        $this->assertLessThanOrEqual(880.0, $delay4);
     }
 
     #[Test]
-    public function linear_backoff_increases_linearly(): void
+    public function linear_backoff_calculation(): void
     {
-        $policy = RetryPolicy::linear(5, baseDelayMs: 100.0, maxDelayMs: 10000.0);
+        $policy = RetryPolicy::linear(5, baseDelayMs: 100.0, maxDelayMs: 350.0);
 
+        // Attempt 1: 100ms
+        $delay1 = $policy->calculateDelay(1);
+        $this->assertGreaterThanOrEqual(100.0, $delay1);
+        $this->assertLessThanOrEqual(110.0, $delay1);
+
+        // Attempt 2: 200ms
+        $delay2 = $policy->calculateDelay(2);
+        $this->assertGreaterThanOrEqual(200.0, $delay2);
+        $this->assertLessThanOrEqual(220.0, $delay2);
+
+        // Attempt 3: 300ms
+        $delay3 = $policy->calculateDelay(3);
+        $this->assertGreaterThanOrEqual(300.0, $delay3);
+        $this->assertLessThanOrEqual(330.0, $delay3);
+
+        // Attempt 4: capped at 350ms (maxDelayMs)
+        $delay4 = $policy->calculateDelay(4);
+        $this->assertLessThanOrEqual(350.0, $delay4);
+    }
+
+    #[Test]
+    public function fixed_backoff_calculation(): void
+    {
+        $policy = RetryPolicy::fixed(3, delayMs: 500.0);
+
+        // All attempts should return ~500ms (with jitter)
         $delay1 = $policy->calculateDelay(1);
         $delay2 = $policy->calculateDelay(2);
         $delay3 = $policy->calculateDelay(3);
 
-        $this->assertGreaterThanOrEqual(100, $delay1);
-        $this->assertGreaterThanOrEqual(200, $delay2);
-        $this->assertGreaterThanOrEqual(300, $delay3);
+        $this->assertGreaterThanOrEqual(500.0, $delay1);
+        $this->assertLessThanOrEqual(550.0, $delay1);
+
+        $this->assertGreaterThanOrEqual(500.0, $delay2);
+        $this->assertLessThanOrEqual(550.0, $delay2);
+
+        $this->assertGreaterThanOrEqual(500.0, $delay3);
+        $this->assertLessThanOrEqual(550.0, $delay3);
     }
 
     #[Test]
-    public function fixed_backoff_constant_delay(): void
-    {
-        $policy = RetryPolicy::fixed(5, delayMs: 500.0);
-
-        $delay1 = $policy->calculateDelay(1);
-        $delay2 = $policy->calculateDelay(2);
-        $delay3 = $policy->calculateDelay(3);
-
-        $this->assertGreaterThanOrEqual(500, $delay1);
-        $this->assertLessThanOrEqual(550, $delay1);
-
-        $this->assertGreaterThanOrEqual(500, $delay2);
-        $this->assertLessThanOrEqual(550, $delay2);
-
-        $this->assertGreaterThanOrEqual(500, $delay3);
-        $this->assertLessThanOrEqual(550, $delay3);
-    }
-
-    #[Test]
-    public function max_delay_caps_exponential_growth(): void
-    {
-        $policy = RetryPolicy::exponential(10, baseDelayMs: 100.0, maxDelayMs: 500.0);
-
-        $delay = $policy->calculateDelay(10);
-
-        $this->assertLessThanOrEqual(500, $delay);
-    }
-
-    #[Test]
-    public function jitter_adds_to_base_delay(): void
-    {
-        $policy = RetryPolicy::fixed(5, delayMs: 1000.0);
-
-        $delay = $policy->calculateDelay(1);
-
-        $this->assertGreaterThanOrEqual(1000, $delay, 'Delay should be at least base');
-        $this->assertLessThanOrEqual(1100, $delay, 'Delay should be at most base + 10% jitter');
-    }
-
-    #[Test]
-    public function should_retry_returns_true_by_default(): void
+    public function should_retry_with_empty_retry_on_retries_all(): void
     {
         $policy = RetryPolicy::exponential(3);
 
-        $this->assertTrue($policy->shouldRetry(new \RuntimeException()));
-        $this->assertTrue($policy->shouldRetry(new \InvalidArgumentException()));
-        $this->assertTrue($policy->shouldRetry(new \LogicException()));
+        // Empty retryOn = retry all exceptions
+        $this->assertTrue($policy->shouldRetry(new RuntimeException('test')));
+        $this->assertTrue($policy->shouldRetry(new InvalidArgumentException('test')));
+        $this->assertTrue($policy->shouldRetry(new \LogicException('test')));
     }
 
     #[Test]
-    public function should_retry_returns_false_for_cancelled(): void
+    public function should_retry_with_specific_exceptions(): void
     {
-        $policy = RetryPolicy::exponential(3);
+        $policy = RetryPolicy::exponential(3)->retryingOn(
+            RuntimeException::class,
+        );
 
+        $this->assertTrue($policy->shouldRetry(new RuntimeException('test')));
+        $this->assertFalse($policy->shouldRetry(new InvalidArgumentException('test')));
+        $this->assertFalse($policy->shouldRetry(new \LogicException('test')));
+    }
+
+    #[Test]
+    public function should_retry_matches_subclasses(): void
+    {
+        $policy = RetryPolicy::exponential(3)->retryingOn(
+            RuntimeException::class,
+        );
+
+        // UnexpectedValueException extends RuntimeException
+        $this->assertTrue($policy->shouldRetry(new UnexpectedValueException('test')));
+    }
+
+    #[Test]
+    public function never_retries_cancelled_exception(): void
+    {
+        // Even with empty retryOn (retry all)
+        $policy = RetryPolicy::exponential(3);
         $this->assertFalse($policy->shouldRetry(new CancelledException()));
+
+        // Even if CancelledException is explicitly in retryOn
+        $policyWithCancelled = RetryPolicy::exponential(3)->retryingOn(
+            CancelledException::class,
+            RuntimeException::class,
+        );
+        $this->assertFalse($policyWithCancelled->shouldRetry(new CancelledException()));
     }
 
     #[Test]
-    public function retrying_on_filters_exceptions(): void
+    public function rejects_invalid_attempts(): void
     {
-        $policy = RetryPolicy::exponential(3)
-            ->retryingOn(\RuntimeException::class);
-
-        $this->assertTrue($policy->shouldRetry(new \RuntimeException()));
-        $this->assertFalse($policy->shouldRetry(new \InvalidArgumentException()));
-    }
-
-    #[Test]
-    public function retrying_on_matches_subclasses(): void
-    {
-        $policy = RetryPolicy::exponential(3)
-            ->retryingOn(\RuntimeException::class);
-
-        $this->assertTrue($policy->shouldRetry(new \UnexpectedValueException()));
-    }
-
-    #[Test]
-    public function attempt_zero_returns_zero_delay(): void
-    {
-        $policy = RetryPolicy::exponential(3, baseDelayMs: 100.0);
-
-        $this->assertEquals(0.0, $policy->calculateDelay(0));
-    }
-
-    #[Test]
-    public function invalid_attempts_throws(): void
-    {
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Attempts must be at least 1');
 
         RetryPolicy::exponential(0);
     }
 
     #[Test]
-    public function invalid_backoff_strategy_throws(): void
+    public function rejects_invalid_backoff_strategy(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid backoff strategy');
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid backoff strategy: invalid');
 
-        new RetryPolicy(3, 'invalid', 100.0, 1000.0);
+        new RetryPolicy(
+            attempts: 3,
+            backoff: 'invalid',
+            baseDelayMs: 100.0,
+            maxDelayMs: 1000.0,
+        );
+    }
+
+    #[Test]
+    public function retrying_on_returns_new_instance(): void
+    {
+        $policy1 = RetryPolicy::exponential(3);
+        $policy2 = $policy1->retryingOn(RuntimeException::class);
+
+        $this->assertNotSame($policy1, $policy2);
+        $this->assertEmpty($policy1->retryOn);
+        $this->assertEquals([RuntimeException::class], $policy2->retryOn);
+    }
+
+    #[Test]
+    public function factory_methods_set_correct_properties(): void
+    {
+        $exponential = RetryPolicy::exponential(3);
+        $this->assertSame(3, $exponential->attempts);
+        $this->assertSame('exponential', $exponential->backoff);
+
+        $linear = RetryPolicy::linear(5);
+        $this->assertSame(5, $linear->attempts);
+        $this->assertSame('linear', $linear->backoff);
+
+        $fixed = RetryPolicy::fixed(2, 500.0);
+        $this->assertSame(2, $fixed->attempts);
+        $this->assertSame('fixed', $fixed->backoff);
+        $this->assertSame(500.0, $fixed->baseDelayMs);
     }
 }

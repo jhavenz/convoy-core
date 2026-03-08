@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Convoy;
 
-use Convoy\Middleware\ServiceTransform;
-use Convoy\Middleware\TaskInterceptor;
+use Convoy\Middleware\ServiceTransformationMiddleware;
+use Convoy\Middleware\TaskMiddleware;
 use Convoy\Service\LazySingleton;
 use Convoy\Service\ServiceBundle;
 use Convoy\Service\ServiceCatalog;
@@ -22,11 +22,11 @@ final class ApplicationBuilder
     /** @var list<ServiceBundle> */
     private array $providers = [];
 
-    /** @var list<TaskInterceptor> */
+    /** @var list<TaskMiddleware> */
     private array $taskInterceptors = [];
 
-    /** @var list<ServiceTransform> */
-    private array $serviceTransforms = [];
+    /** @var list<ServiceTransformationMiddleware> */
+    private array $serviceMiddleware = [];
 
     /** @param array<string, mixed> $context */
     public function __construct(
@@ -34,16 +34,16 @@ final class ApplicationBuilder
     ) {
     }
 
-    public function middleware(ServiceTransform ...$transforms): self
+    public function serviceMiddleware(ServiceTransformationMiddleware ...$middleware): self
     {
-        foreach ($transforms as $transform) {
-            $this->serviceTransforms[] = $transform;
+        foreach ($middleware as $mw) {
+            $this->serviceMiddleware[] = $mw;
         }
 
         return $this;
     }
 
-    public function taskMiddleware(TaskInterceptor ...$interceptors): self
+    public function taskMiddleware(TaskMiddleware ...$interceptors): self
     {
         foreach ($interceptors as $interceptor) {
             $this->taskInterceptors[] = $interceptor;
@@ -89,7 +89,7 @@ final class ApplicationBuilder
         }
 
         $compiler = new ServiceGraphCompiler();
-        $graph = $compiler->compile($registry, $this->serviceTransforms, $this->context);
+        $graph = $compiler->compile($registry, $this->serviceMiddleware, $this->context);
 
         $singletons = new LazySingleton($graph, $trace);
 

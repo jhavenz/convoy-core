@@ -6,17 +6,17 @@ namespace Convoy\Service;
 
 use Convoy\Exception\CyclicDependencyException;
 use Convoy\Exception\InvalidServiceConfigurationException;
-use Convoy\Middleware\ConditionalTransform;
+use Convoy\Middleware\ConditionalTransformationMiddleware;
 
 final class ServiceGraphCompiler
 {
     /**
-     * @param list<\Convoy\Middleware\ServiceTransform> $transforms
+     * @param list<\Convoy\Middleware\ServiceTransformationMiddleware> $middleware
      * @param array<string, mixed> $context
      */
     public function compile(
         ServiceCatalog $catalog,
-        array $transforms,
+        array $middleware,
         array $context,
     ): ServiceGraph {
         $configs = $catalog->resolveConfigs($context);
@@ -24,7 +24,7 @@ final class ServiceGraphCompiler
         $definitions = $catalog->definitions();
 
         foreach ($definitions as $type => $def) {
-            $definitions[$type] = $this->applyTransforms($def, $transforms);
+            $definitions[$type] = $this->applyMiddleware($def, $middleware);
         }
 
         $this->validateDependencies($definitions, $catalog->aliases());
@@ -51,15 +51,15 @@ final class ServiceGraphCompiler
         return new ServiceGraph($services, $catalog->aliases(), $configs);
     }
 
-    /** @param list<\Convoy\Middleware\ServiceTransform> $transforms */
-    private function applyTransforms(ServiceDefinition $def, array $transforms): ServiceDefinition
+    /** @param list<\Convoy\Middleware\ServiceTransformationMiddleware> $middleware */
+    private function applyMiddleware(ServiceDefinition $def, array $middleware): ServiceDefinition
     {
-        foreach ($transforms as $transform) {
-            if ($transform instanceof ConditionalTransform && !$transform->applies($def)) {
+        foreach ($middleware as $mw) {
+            if ($mw instanceof ConditionalTransformationMiddleware && !$mw->applies($def)) {
                 continue;
             }
 
-            $def = $transform($def);
+            $def = $mw($def);
         }
 
         return $def;
@@ -201,8 +201,6 @@ final class ServiceGraphCompiler
 
     private function defaultFactory(string $type): \Closure
     {
-        return static function (...$args) use ($type): object {
-            return new $type(...$args);
-        };
+        return static fn(...$args): object => new $type(...$args);
     }
 }

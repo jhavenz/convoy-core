@@ -2,26 +2,15 @@
 
 declare(strict_types=1);
 
-use Rector\CodeQuality\Rector\Foreach_\ForeachItemsAssignToEmptyArrayToAssignRector;
 use Rector\Config\RectorConfig;
-use Rector\Php74\Rector\Closure\ClosureToArrowFunctionRector;
+use Rector\Php84\Rector\Param\ExplicitNullableParamTypeRector;
 
 return RectorConfig::configure()
-    ->withPaths([__DIR__ . '/src'])
+    ->withPaths([__DIR__ . '/src', __DIR__ . '/tests'])
     ->withPhpSets(php84: true)
-    ->withPreparedSets(
-        deadCode: true,
-        codeQuality: true,
-        typeDeclarations: true,
-        privatization: true,
-    )
-    ->withImportNames(
-        importNames: true,
-        importDocBlockNames: true,
-        importShortClasses: false,
-        removeUnusedImports: true,
-    )
+    ->withRules([
+        ExplicitNullableParamTypeRector::class,
+    ])
     ->withSkip([
-        ClosureToArrowFunctionRector::class,
-        ForeachItemsAssignToEmptyArrayToAssignRector::class,
+        __DIR__ . '/vendor',
     ]);

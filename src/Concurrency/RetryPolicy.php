@@ -9,8 +9,8 @@ use Throwable;
 
 final readonly class RetryPolicy
 {
-    private const DEFAULT_BASE_DELAY_MS = 100.0;
-    private const DEFAULT_MAX_DELAY_MS = 30000.0;
+    private const float DEFAULT_BASE_DELAY_MS = 100.0;
+    private const float DEFAULT_MAX_DELAY_MS = 30000.0;
 
     public function __construct(
         public int $attempts,

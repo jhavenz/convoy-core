@@ -8,6 +8,7 @@ use Closure;
 use Convoy\Concurrency\CancellationToken;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Concurrency\SettlementBag;
+use Convoy\Task\Dispatchable;
 use Convoy\Trace\Trace;
 
 interface Scope
@@ -16,55 +17,51 @@ interface Scope
 
     public function service(string $type): object;
 
-    public function resolve(callable $task): mixed;
+    public function execute(Dispatchable $task): mixed;
 
-    public function resolveFresh(callable $task): mixed;
+    public function executeFresh(Dispatchable $task): mixed;
 
     /**
-     * @param array<string|int, callable(Scope): mixed> $tasks
+     * @param array<string|int, Dispatchable> $tasks
      * @return array<string|int, mixed>
      */
     public function concurrent(array $tasks): array;
 
-    /** @param array<string|int, callable(Scope): mixed> $tasks */
+    /** @param array<string|int, Dispatchable> $tasks */
     public function race(array $tasks): mixed;
 
-    /** @param array<string|int, callable(Scope): mixed> $tasks */
+    /** @param array<string|int, Dispatchable> $tasks */
     public function any(array $tasks): mixed;
 
     /**
-     * @param array<string|int, mixed> $items
+     * @template T
+     * @param array<string|int, T> $items
+     * @param Closure(T): Dispatchable $fn
      * @return array<string|int, mixed>
      */
-    public function map(array $items, callable $fn, int $limit = 10): array;
+    public function map(array $items, Closure $fn, int $limit = 10): array;
 
     /**
-     * @param list<callable(Scope): mixed> $tasks
+     * @param list<Dispatchable> $tasks
      * @return list<mixed>
      */
     public function series(array $tasks): array;
 
-    /** @param list<callable> $tasks */
+    /**
+     * @param list<Dispatchable> $tasks
+     */
     public function waterfall(array $tasks): mixed;
 
     public function delay(float $seconds): void;
 
-    public function retry(callable $task, RetryPolicy $policy): mixed;
+    public function retry(Dispatchable $task, RetryPolicy $policy): mixed;
 
     /**
-     * Run all tasks concurrently, collecting all outcomes.
-     * Never throws - errors captured in Settlement::err().
-     *
-     * @param array<string|int, callable> $tasks
+     * @param array<string|int, Dispatchable> $tasks
      */
     public function settle(array $tasks): SettlementBag;
 
-    /**
-     * Run task with timeout. Throws CancelledException if timeout exceeded.
-     *
-     * @throws \Convoy\Exception\CancelledException
-     */
-    public function timeout(float $seconds, callable $task): mixed;
+    public function timeout(float $seconds, Dispatchable $task): mixed;
 
     public function throwIfCancelled(): void;
 
@@ -75,4 +72,10 @@ interface Scope
     public function dispose(): void;
 
     public function trace(): Trace;
+
+    public function defer(Dispatchable $task): void;
+
+    public function withAttribute(string $key, mixed $value): Scope;
+
+    public function attribute(string $key, mixed $default = null): mixed;
 }
