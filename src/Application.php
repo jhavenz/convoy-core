@@ -22,7 +22,7 @@ final class Application implements AppHost
         private readonly Trace $trace,
         /** @var list<ServiceBundle> */
         private readonly array $serviceProviders,
-        /** @var list<TaskInterceptor> */
+        /** @var list<TaskMiddleware> */
         private readonly array $taskInterceptors,
     ) {
     }

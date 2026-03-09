@@ -57,7 +57,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         private readonly LazySingleton $singletons,
         private readonly CancellationToken $cancellation,
         private readonly Trace $trace,
-        /** @var list<TaskInterceptor> */
+        /** @var list<TaskMiddleware> */
         private readonly array $taskInterceptors = [],
         /** @var array<string, mixed> */
         private array $attributes = []
