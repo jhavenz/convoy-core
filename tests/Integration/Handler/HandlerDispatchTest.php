@@ -50,12 +50,10 @@ final class HandlerDispatchTest extends TestCase
     public function extracts_route_params_to_attributes(): void
     {
         $group = HandlerGroup::of([
-            'GET /users/{id}' => Handler::route(Task::of(static function (ExecutionScope $es): array {
-                return [
-                    'id' => $es->attribute('route.id'),
-                    'params' => $es->attribute('route.params'),
-                ];
-            })),
+            'GET /users/{id}' => Handler::route(Task::of(static fn(ExecutionScope $es): array => [
+                'id' => $es->attribute('route.id'),
+                'params' => $es->attribute('route.params'),
+            ])),
         ]);
 
         $request = $this->createRequest('GET', '/users/42');

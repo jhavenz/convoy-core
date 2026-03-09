@@ -20,6 +20,7 @@ use WeakMap;
  */
 final class ManagedResource
 {
+    /** @var WeakMap<object, Closure> */
     private static WeakMap $cleanup;
     private static bool $shutdownRegistered = false;
 
@@ -67,9 +68,7 @@ final class ManagedResource
         });
     }
 
-    /**
-     * @deprecated Use enableShutdownFlush() instead.
-     */
+    #[\Deprecated(message: 'Use enableShutdownFlush() instead.')]
     public static function flushOnShutdown(): void
     {
         self::enableShutdownFlush();

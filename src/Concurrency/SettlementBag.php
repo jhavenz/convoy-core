@@ -24,20 +24,12 @@ final class SettlementBag implements ArrayAccess, IteratorAggregate, Countable
     /** @var array<string|int, \Throwable> */
     private(set) array $cachedErrors;
 
-    /**
-     * All successful values keyed by original key.
-     *
-     * @return array<string|int, mixed>
-     */
+    /** @var array<string|int, mixed> */
     public array $values {
         get => $this->cachedValues;
     }
 
-    /**
-     * All errors keyed by original key.
-     *
-     * @return array<string|int, \Throwable>
-     */
+    /** @var array<string|int, \Throwable> */
     public array $errors {
         get => $this->cachedErrors;
     }
@@ -70,20 +62,12 @@ final class SettlementBag implements ArrayAccess, IteratorAggregate, Countable
         get => $this->cachedErrors !== [];
     }
 
-    /**
-     * Keys of successful settlements.
-     *
-     * @return list<string|int>
-     */
+    /** @var list<string|int> */
     public array $okKeys {
         get => array_keys($this->cachedValues);
     }
 
-    /**
-     * Keys of failed settlements.
-     *
-     * @return list<string|int>
-     */
+    /** @var list<string|int> */
     public array $errKeys {
         get => array_keys($this->cachedErrors);
     }
@@ -99,7 +83,7 @@ final class SettlementBag implements ArrayAccess, IteratorAggregate, Countable
         foreach ($settlements as $key => $settlement) {
             if ($settlement->isOk) {
                 $values[$key] = $settlement->value;
-            } else {
+            } elseif ($settlement->error !== null) {
                 $errors[$key] = $settlement->error;
             }
         }

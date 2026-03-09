@@ -185,9 +185,8 @@ final readonly class HandlerLoader
      *
      * @param string $dir Directory path
      * @param Scope|null $scope For dynamic loading
-     *
-     * @deprecated Use loadRouteDirectory or loadCommandDirectory for typed returns
      */
+    #[\Deprecated(message: 'Use loadRouteDirectory or loadCommandDirectory for typed returns')]
     public static function loadDirectory(string $dir, ?Scope $scope = null): HandlerGroup
     {
         if (!is_dir($dir)) {
@@ -223,9 +222,8 @@ final readonly class HandlerLoader
      *
      * @param string $pattern Glob pattern (e.g., "handlers/*.php")
      * @param Scope|null $scope For dynamic loading
-     *
-     * @deprecated Use specific route/command loading for typed returns
      */
+    #[\Deprecated(message: 'Use specific route/command loading for typed returns')]
     public static function glob(string $pattern, ?Scope $scope = null): HandlerGroup
     {
         $files = glob($pattern);

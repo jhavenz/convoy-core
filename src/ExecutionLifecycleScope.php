@@ -16,6 +16,7 @@ use Convoy\Service\LazyFactory;
 use Convoy\Service\LazySingleton;
 use Convoy\Service\ServiceGraph;
 use Convoy\Support\ClassNames;
+use Convoy\Middleware\TaskMiddleware;
 use Convoy\Task\Executable;
 use Convoy\Task\HasPriority;
 use Convoy\Task\HasTimeout;

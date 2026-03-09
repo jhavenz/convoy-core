@@ -99,8 +99,7 @@ final class ApplicationBuilder
     private function loadDiscoveredProviders(): void
     {
         $vendorPath = $this->context['vendor_path']
-            ?? ($this->context['project_dir'] ?? null) . '/vendor'
-            ?? null;
+            ?? (isset($this->context['project_dir']) ? $this->context['project_dir'] . '/vendor' : null);
 
         if ($vendorPath === null) {
             return;

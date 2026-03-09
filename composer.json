@@ -55,7 +55,9 @@
     "autoload-dev": {
         "psr-4": {
             "Convoy\\Tests\\": "tests/",
-            "Convoy\\Examples\\": "examples/"
+            "Convoy\\Examples\\Support\\": "examples/_shared/Services/",
+            "Convoy\\Examples\\Tasks\\": "examples/_shared/Tasks/",
+            "Convoy\\Examples\\Exceptions\\": "examples/_shared/Exceptions/"
         },
         "classmap": [
             "tests/Support/Fixtures/"

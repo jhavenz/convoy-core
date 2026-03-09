@@ -9,6 +9,9 @@ use UnitEnum;
 
 final readonly class TaskConfig
 {
+    /**
+     * @param list<string> $tags
+     */
     public function __construct(
         public string $name = '',
         public int $priority = 0,
@@ -21,6 +24,9 @@ final readonly class TaskConfig
     ) {
     }
 
+    /**
+     * @param list<string>|null $tags
+     */
     public function with(
         ?string $name = null,
         ?int $priority = null,

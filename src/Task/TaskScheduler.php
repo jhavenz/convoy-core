@@ -14,8 +14,13 @@ use function React\Promise\race;
 
 final class TaskScheduler implements Executable
 {
+    /** @var SplPriorityQueue<int, array{task: Scopeable|Executable, index: int}> */
     private readonly SplPriorityQueue $queue;
+
+    /** @var WeakMap<Scopeable|Executable, mixed> */
     private WeakMap $results;
+
+    /** @var array<string, int> */
     private array $runningByPool = [];
 
     /**
@@ -58,15 +63,18 @@ final class TaskScheduler implements Executable
                 $results = $this->results;
                 $running = &$this->runningByPool;
 
+                $pendingState = (object) ['done' => false];
                 $pending[] = [
                     'pool' => $poolKey,
-                    'promise' => async(static function () use ($scope, $task, $results, &$running, $poolKey): mixed {
+                    'state' => $pendingState,
+                    'promise' => async(static function () use ($scope, $task, $results, &$running, $poolKey, $pendingState): mixed {
                         try {
                             $result = $scope->execute($task);
                             $results[$task] = $result;
                             return $result;
                         } finally {
                             $running[$poolKey]--;
+                            $pendingState->done = true;
                         }
                     })(),
                 ];
@@ -81,11 +89,12 @@ final class TaskScheduler implements Executable
 
             $pending = array_values(array_filter(
                 $pending,
-                static fn($item): bool => $item['promise']->state() === 'pending',
+                static fn($item): bool => !$item['state']->done,
             ));
         }
     }
 
+    /** @return array<int|string, mixed> */
     public function __invoke(ExecutionScope $scope): array
     {
         foreach ($this->tasks as $index => $task) {

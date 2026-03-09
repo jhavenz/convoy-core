@@ -28,7 +28,7 @@ readonly class HandlerConfig
 
     public function withTags(string ...$tags): self
     {
-        return new self([...$this->tags, ...$tags], $this->priority);
+        return new self(array_values([...$this->tags, ...$tags]), $this->priority);
     }
 
     public function withPriority(int $priority): self

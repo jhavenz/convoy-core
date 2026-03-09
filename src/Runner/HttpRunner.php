@@ -9,7 +9,7 @@ use Convoy\Concurrency\CancellationToken;
 use Convoy\Handler\HandlerGroup;
 use Convoy\Http\RouteGroup;
 use Convoy\Support\SignalHandler;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
 use Convoy\Trace\TraceType;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -38,7 +38,7 @@ final class HttpRunner
 
     public function __construct(
         private readonly AppHost $app,
-        private readonly Dispatchable $handler,
+        private readonly Executable $handler,
         private readonly float $requestTimeout = 30.0,
     ) {
     }

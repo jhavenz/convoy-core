@@ -244,7 +244,7 @@ final readonly class HandlerGroup implements Executable
     {
         return new self(
             $this->handlers,
-            [...$this->middleware, ...$middleware],
+            array_values([...$this->middleware, ...$middleware]),
         );
     }
 

@@ -8,7 +8,8 @@ use Convoy\AppHost;
 use Convoy\Console\CommandConfig;
 use Convoy\Console\CommandGroup;
 use Convoy\Handler\HandlerGroup;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 use RuntimeException;
 
 /**
@@ -22,7 +23,7 @@ use RuntimeException;
 final readonly class ConsoleRunner
 {
     /**
-     * @param array<string, Dispatchable> $commands
+     * @param array<string, Scopeable|Executable> $commands
      */
     public function __construct(
         private AppHost $app,
@@ -47,7 +48,7 @@ final readonly class ConsoleRunner
         return new self($app, [], $commands);
     }
 
-    public function withCommand(string $name, Dispatchable $handler): self
+    public function withCommand(string $name, Scopeable|Executable $handler): self
     {
         return new self(
             $this->app,
@@ -75,8 +76,13 @@ final readonly class ConsoleRunner
         return $this->doRun($command, $args);
     }
 
+    /**
+     * @param list<string> $args
+     */
     private function runWithHandlers(string $command, array $args): int
     {
+        assert($this->handlers !== null);
+
         $handlerGroup = $this->handlers instanceof CommandGroup
             ? $this->handlers->handlers()
             : $this->handlers;
@@ -118,6 +124,7 @@ final readonly class ConsoleRunner
         }
     }
 
+    /** @param list<string> $args */
     private function doRun(string $command, array $args): int
     {
         if (!isset($this->commands[$command])) {

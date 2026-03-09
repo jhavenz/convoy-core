@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Convoy\Tests\Unit\Handler;
 
-use Convoy\Handler\CommandConfig;
+use Convoy\Console\CommandConfig;
 use Convoy\Handler\Handler;
 use Convoy\Handler\HandlerGroup;
-use Convoy\Handler\RouteConfig;
+use Convoy\Http\RouteConfig;
 use Convoy\ExecutionScope;
 use Convoy\Task\Task;
 use PHPUnit\Framework\Attributes\Test;

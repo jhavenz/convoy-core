@@ -2,6 +2,27 @@
 
 Convoy is an async coordination library for PHP 8.4+. It replaces callbacks with typed tasks—named computations that carry their own identity, behavior, and lifecycle through a unified execution model built on ReactPHP.
 
+## Table of Contents
+
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [How It Works](#how-it-works)
+  - [Scope Hierarchy](#scope-hierarchy)
+- [The Task System](#the-task-system)
+  - [Two Ways to Define Tasks](#two-ways-to-define-tasks)
+  - [Behavior via Interfaces](#behavior-via-interfaces)
+- [Concurrency Primitives](#concurrency-primitives)
+- [Route Groups](#route-groups)
+  - [Loading Routes](#loading-routes)
+  - [Composing Route Groups](#composing-route-groups)
+- [Command Groups](#command-groups)
+  - [Running Commands](#running-commands)
+- [Services](#services)
+- [Cancellation & Retry](#cancellation--retry)
+- [Tracing](#tracing)
+- [Deterministic Cleanup](#deterministic-cleanup)
+- [Examples](#examples)
+
 ## Installation
 
 ```bash
@@ -390,23 +411,40 @@ $scope->dispose();  // Cleanup fires in reverse order
 
 ## Examples
 
-The `examples/` directory contains runnable examples:
+The `examples/` directory contains progressive examples in three tiers:
 
-**HTTP Server** (`examples/http-server.php`):
-- Concurrent stock price API reading 10 CSVs in parallel
-- RouteGroup, route parameters, bounded parallelism with `$scope->map()`
+### Beginner
+- `01-hello-task.php` - Task::of() basics, app lifecycle
+- `02-invokable-task.php` - Scopeable classes vs closures
+- `03-service-resolution.php` - ServiceBundle, `$scope->service()`
+- `04-simple-http-route.php` - Single route HTTP server
 
-**Console App** (`examples/console-app.php`):
-- Stock analysis CLI with `aggregate`, `compare`, and `top` commands
-- `$scope->concurrent()`, invokable task classes with `Traceable`
+### Intermediate
+- `01-concurrent-basics.php` - `$scope->concurrent()` parallel execution
+- `02-map-with-limits.php` - Bounded parallelism
+- `03-http-routes.php` - RouteGroup with concurrent data
+- `04-console-commands.php` - CommandGroup patterns
+- `05-series-waterfall.php` - Sequential execution modes
+
+### Advanced
+- `01-retry-policies.php` - Retryable interface, backoff strategies
+- `02-timeouts.php` - HasTimeout, `$scope->timeout()`
+- `03-cancellation.php` - CancellationToken patterns
+- `04-settle-errors.php` - SettlementBag, partial failures
+- `05-race-any.php` - race() and any() patterns
+- `06-composite-tasks.php` - Nested concurrent operations
+- `07-production-server.php` - Full HTTP server
 
 ```bash
-# HTTP server
-CONVOY_TRACE=1 php examples/http-server.php
+# Beginner
+php examples/01-beginner/01-hello-task.php
 
-# Console commands
-CONVOY_TRACE=1 php examples/console-app.php aggregate
-CONVOY_TRACE=1 php examples/console-app.php compare AAPL GOOGL
+# Intermediate with tracing
+CONVOY_TRACE=1 php examples/02-intermediate/01-concurrent-basics.php
+
+# Advanced production server
+php examples/03-advanced/07-production-server.php
+curl http://localhost:8093/api/stocks
 ```
 
 See `examples/README.md` for full details.

@@ -20,7 +20,7 @@ final readonly class Reduce implements Executable
     {
         $accumulator = $this->initial;
 
-        foreach ($this->sequence($scope) as $key => $value) {
+        foreach (($this->sequence)($scope) as $key => $value) {
             $scope->throwIfCancelled();
             $accumulator = ($this->reducer)($accumulator, $value, $key, $scope);
         }

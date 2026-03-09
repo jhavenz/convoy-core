@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Convoy\Tests\Unit\Handler;
 
-use Convoy\Handler\RouteConfig;
+use Convoy\Http\RouteConfig;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 

@@ -7,7 +7,7 @@ namespace Convoy\Runtime;
 use Convoy\AppHost;
 use Convoy\Concurrency\CancellationToken;
 use Convoy\Support\SignalHandler;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
 use Convoy\Trace\TraceType;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -33,7 +33,7 @@ final class ConvoyHttpRunner implements RunnerInterface
     private ?TimerInterface $windowsTimer = null;
     private bool $running = false;
     private bool $shutdownRequested = false;
-    private ?Dispatchable $handler = null;
+    private ?Executable $handler = null;
 
     public function __construct(
         private readonly AppHost $app,
@@ -43,7 +43,7 @@ final class ConvoyHttpRunner implements RunnerInterface
     ) {
     }
 
-    public function withHandler(Dispatchable $handler): self
+    public function withHandler(Executable $handler): self
     {
         $clone = clone $this;
         $clone->handler = $handler;
@@ -78,6 +78,8 @@ final class ConvoyHttpRunner implements RunnerInterface
 
     private function handleRequest(ServerRequestInterface $request): ResponseInterface
     {
+        assert($this->handler !== null);
+
         $token = CancellationToken::timeout($this->requestTimeout);
         $scope = $this->app->createScope($token);
         $scope = $scope->withAttribute('request', $request);

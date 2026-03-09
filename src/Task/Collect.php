@@ -13,8 +13,9 @@ final readonly class Collect implements Scopeable
     ) {
     }
 
+    /** @return array<mixed> */
     public function __invoke(Scope $scope): array
     {
-        return iterator_to_array($this->sequence($scope));
+        return iterator_to_array(($this->sequence)($scope));
     }
 }

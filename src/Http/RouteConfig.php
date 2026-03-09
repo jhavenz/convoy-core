@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Convoy\Http;
 
 use Convoy\Handler\HandlerConfig;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 
 /**
  * HTTP route configuration with path matching and middleware.
@@ -25,7 +26,7 @@ final readonly class RouteConfig extends HandlerConfig
     /**
      * @param list<string> $methods
      * @param list<string> $paramNames
-     * @param list<Dispatchable> $middleware
+     * @param list<Scopeable|Executable> $middleware
      * @param list<string> $tags
      */
     public function __construct(
@@ -44,11 +45,13 @@ final readonly class RouteConfig extends HandlerConfig
      *
      * /users/{id}        -> /users/(?P<id>[^/]+)
      * /users/{id:\d+}    -> /users/(?P<id>\d+)
+     *
+     * @param string|list<string> $method
      */
     public static function compile(string $path, string|array $method = 'GET'): self
     {
         $methods = is_array($method) ? $method : [$method];
-        $methods = array_map(strtoupper(...), $methods);
+        $methods = array_values(array_map(strtoupper(...), $methods));
 
         $paramNames = [];
         $pattern = preg_replace_callback(
@@ -97,10 +100,11 @@ final readonly class RouteConfig extends HandlerConfig
         return $params;
     }
 
+    /** @param string|list<string> $method */
     public function withMethod(string|array $method): self
     {
         $methods = is_array($method) ? $method : [$method];
-        $methods = array_map(strtoupper(...), $methods);
+        $methods = array_values(array_map(strtoupper(...), $methods));
 
         return new self(
             $methods,
@@ -126,18 +130,19 @@ final readonly class RouteConfig extends HandlerConfig
         );
     }
 
-    public function withMiddleware(Dispatchable ...$middleware): self
+    public function withMiddleware(Scopeable|Executable ...$middleware): self
     {
         return new self(
             $this->methods,
             $this->pattern,
             $this->paramNames,
-            [...$this->middleware, ...$middleware],
+            array_values([...$this->middleware, ...$middleware]),
             $this->tags,
             $this->priority,
         );
     }
 
+    #[\Override]
     public function withTags(string ...$tags): self
     {
         return new self(
@@ -145,11 +150,12 @@ final readonly class RouteConfig extends HandlerConfig
             $this->pattern,
             $this->paramNames,
             $this->middleware,
-            [...$this->tags, ...$tags],
+            array_values([...$this->tags, ...$tags]),
             $this->priority,
         );
     }
 
+    #[\Override]
     public function withPriority(int $priority): self
     {
         return new self(
