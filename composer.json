@@ -22,6 +22,7 @@
     "require": {
         "php": "^8.4",
         "react/async": "^4.3",
+        "react/child-process": "^0.6",
         "react/event-loop": "^1.5",
         "react/promise": "^3.2"
     },
@@ -63,6 +64,9 @@
             "tests/Support/Fixtures/"
         ]
     },
+    "bin": [
+        "bin/convoy-worker"
+    ],
     "config": {
         "sort-packages": true,
         "allow-plugins": {

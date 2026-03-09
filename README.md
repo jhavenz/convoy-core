@@ -12,6 +12,7 @@ Convoy is an async coordination library for PHP 8.4+. It replaces callbacks with
   - [Two Ways to Define Tasks](#two-ways-to-define-tasks)
   - [Behavior via Interfaces](#behavior-via-interfaces)
 - [Concurrency Primitives](#concurrency-primitives)
+- [Workers](#workers)
 - [Route Groups](#route-groups)
   - [Loading Routes](#loading-routes)
   - [Composing Route Groups](#composing-route-groups)
@@ -222,6 +223,40 @@ $data = $scope->any([
 $results = $scope->map($items, fn($item) => new ProcessItem($item), limit: 10);
 ```
 
+## Workers
+
+Fibers handle I/O concurrency—delays overlap. Workers handle CPU isolation—heavy computation runs in a separate process, keeping the event loop responsive.
+
+```php
+<?php
+
+// CPU-intensive task offloaded to worker process
+$result = $scope->inWorker(new AnalyzePortfolio($stocks));
+```
+
+Tasks must be serializable (invokable classes with serializable constructor args). Services accessed via `$scope->service()` are proxied back to the parent process.
+
+```php
+<?php
+
+final class MonteCarlo implements Scopeable
+{
+    public function __construct(
+        private array $prices,
+        private int $iterations = 10000,
+    ) {}
+
+    public function __invoke(Scope $scope): array
+    {
+        return $scope->service(Simulator::class)
+            ->simulate($this->prices, $this->iterations);
+    }
+}
+
+// Runs in worker process, returns result to parent
+$projection = $scope->inWorker(new MonteCarlo($prices));
+```
+
 ## Route Groups
 
 Typed collections of HTTP routes with `RouteGroup`:
@@ -425,6 +460,7 @@ The `examples/` directory contains progressive examples in three tiers:
 - `03-http-routes.php` - RouteGroup with concurrent data
 - `04-console-commands.php` - CommandGroup patterns
 - `05-series-waterfall.php` - Sequential execution modes
+- `06-worker-basics.php` - `$scope->inWorker()` process offload
 
 ### Advanced
 - `01-retry-policies.php` - Retryable interface, backoff strategies
@@ -434,6 +470,8 @@ The `examples/` directory contains progressive examples in three tiers:
 - `05-race-any.php` - race() and any() patterns
 - `06-composite-tasks.php` - Nested concurrent operations
 - `07-production-server.php` - Full HTTP server
+- `08-cpu-offload.php` - Monte Carlo simulations in workers
+- `09-hybrid-io-cpu.php` - Fibers for I/O, workers for CPU
 
 ```bash
 # Beginner

@@ -76,4 +76,12 @@ interface ExecutionScope extends Scope
     public function onDispose(Closure $callback): void;
 
     public function dispose(): void;
+
+    /**
+     * Execute a task in a worker process.
+     *
+     * The task must be serializable (invokable class with serializable constructor args).
+     * Services accessed via $scope->service() are proxied back to the parent process.
+     */
+    public function inWorker(Scopeable|Executable $task): mixed;
 }

@@ -139,6 +139,11 @@ final class DeferredScope implements ExecutionScope
         return $this->scope()->attribute($key, $default);
     }
 
+    public function inWorker(Scopeable|Executable $task): mixed
+    {
+        return $this->scope()->inWorker($task);
+    }
+
     private function scope(): ExecutionScope
     {
         return FiberScopeRegistry::current()

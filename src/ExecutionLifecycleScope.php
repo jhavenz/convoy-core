@@ -9,6 +9,7 @@ use Convoy\Concurrency\CancellationToken;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Concurrency\Settlement;
 use Convoy\Concurrency\SettlementBag;
+use Convoy\Middleware\TaskMiddleware;
 use Convoy\Service\CompiledService;
 use Convoy\Service\DeferredScope;
 use Convoy\Service\FiberScopeRegistry;
@@ -16,7 +17,6 @@ use Convoy\Service\LazyFactory;
 use Convoy\Service\LazySingleton;
 use Convoy\Service\ServiceGraph;
 use Convoy\Support\ClassNames;
-use Convoy\Middleware\TaskMiddleware;
 use Convoy\Task\Executable;
 use Convoy\Task\HasPriority;
 use Convoy\Task\HasTimeout;
@@ -27,6 +27,8 @@ use Convoy\Task\Traceable;
 use Convoy\Task\UsesPool;
 use Convoy\Trace\Trace;
 use Convoy\Trace\TraceType;
+use Convoy\Worker\WorkerBridge;
+use React\EventLoop\Loop;
 use React\Promise\Deferred;
 
 use function React\Async\async;
@@ -52,6 +54,8 @@ final class ExecutionLifecycleScope implements ExecutionScope
 
     /** @var list<Closure> */
     private array $disposeCallbacks = [];
+
+    private ?WorkerBridge $workerBridge = null;
 
     public function __construct(
         private readonly ServiceGraph $graph,
@@ -501,6 +505,69 @@ final class ExecutionLifecycleScope implements ExecutionScope
     public function attribute(string $key, mixed $default = null): mixed
     {
         return $this->attributes[$key] ?? $default;
+    }
+
+    public function inWorker(Scopeable|Executable $task): mixed
+    {
+        $this->throwIfCancelled();
+
+        $name = $this->taskName($task);
+        $start = hrtime(true);
+
+        $this->trace->log(TraceType::Executing, "worker:$name", task: $task);
+
+        $bridge = $this->getWorkerBridge();
+        $promise = $bridge->dispatch($task, $this->attributes);
+
+        try {
+            $result = await($promise);
+            $elapsed = (hrtime(true) - $start) / 1e6;
+            $this->trace->log(TraceType::Done, "worker:$name", ['elapsed' => $elapsed]);
+            return $result;
+        } catch (\Throwable $e) {
+            $elapsed = (hrtime(true) - $start) / 1e6;
+            $this->trace->log(TraceType::Failed, "worker:$name", ['elapsed' => $elapsed, 'error' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
+    private function getWorkerBridge(): WorkerBridge
+    {
+        if ($this->workerBridge !== null) {
+            return $this->workerBridge;
+        }
+
+        $autoloadPath = $this->findAutoloadPath();
+
+        $this->workerBridge = new WorkerBridge(
+            graph: $this->graph,
+            singletons: $this->singletons,
+            loop: Loop::get(),
+            autoloadPath: $autoloadPath,
+        );
+
+        $this->onDispose(function (): void {
+            $this->workerBridge?->drain();
+        });
+
+        return $this->workerBridge;
+    }
+
+    private function findAutoloadPath(): string
+    {
+        $candidates = [
+            dirname(__DIR__) . '/vendor/autoload.php',
+            dirname(__DIR__, 3) . '/vendor/autoload.php',
+            dirname(__DIR__, 5) . '/vendor/autoload.php',
+        ];
+
+        foreach ($candidates as $path) {
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+
+        throw new \RuntimeException('Cannot find autoload.php for worker process');
     }
 
     private function executeWithBehavior(Scopeable|Executable $task): mixed

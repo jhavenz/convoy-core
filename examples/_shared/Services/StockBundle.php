@@ -18,5 +18,11 @@ final class StockBundle implements ServiceBundle
 
         $services->singleton(StockAggregator::class)
             ->factory(fn() => new StockAggregator());
+
+        $services->singleton(TechnicalAnalyzer::class)
+            ->factory(fn() => new TechnicalAnalyzer());
+
+        $services->singleton(MonteCarloSimulator::class)
+            ->factory(fn() => new MonteCarloSimulator());
     }
 }

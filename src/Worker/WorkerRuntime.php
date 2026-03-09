@@ -1,0 +1,156 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Convoy\Worker;
+
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
+use Convoy\Trace\Trace;
+use Convoy\Worker\Protocol\Codec;
+use Convoy\Worker\Protocol\MessageType;
+use Convoy\Worker\Protocol\Response;
+use Convoy\Worker\Protocol\TaskRequest;
+use ReflectionClass;
+use ReflectionParameter;
+
+final class WorkerRuntime
+{
+    /** @var resource */
+    private $stdin;
+
+    /** @var resource */
+    private $stdout;
+
+    /** @var resource */
+    private $stderr;
+
+    private string $buffer = '';
+
+    public function __construct(
+        $stdin = STDIN,
+        $stdout = STDOUT,
+        $stderr = STDERR,
+    ) {
+        $this->stdin = $stdin;
+        $this->stdout = $stdout;
+        $this->stderr = $stderr;
+    }
+
+    public function run(): void
+    {
+        stream_set_blocking($this->stdin, false);
+
+        while (!feof($this->stdin)) {
+            $chunk = fread($this->stdin, 8192);
+
+            if ($chunk === false) {
+                break;
+            }
+
+            if ($chunk === '') {
+                usleep(1000);
+                continue;
+            }
+
+            $this->buffer .= $chunk;
+            $this->processBuffer();
+        }
+    }
+
+    private function processBuffer(): void
+    {
+        while (($pos = strpos($this->buffer, "\n")) !== false) {
+            $line = substr($this->buffer, 0, $pos);
+            $this->buffer = substr($this->buffer, $pos + 1);
+
+            if (trim($line) === '') {
+                continue;
+            }
+
+            try {
+                $message = Codec::decode($line);
+
+                if ($message instanceof TaskRequest) {
+                    $this->handleTask($message);
+                } elseif ($message instanceof Response && $message->type === MessageType::ServiceResponse) {
+                    fwrite($this->stderr, "[Worker] Unexpected ServiceResponse - should be handled by WorkerScope\n");
+                }
+            } catch (\Throwable $e) {
+                fwrite($this->stderr, "[Worker] Failed to process message: {$e->getMessage()}\n");
+            }
+        }
+    }
+
+    private function handleTask(TaskRequest $request): void
+    {
+        try {
+            $task = $this->instantiateTask($request);
+            $scope = new WorkerScope(
+                attributes: $request->contextAttrs,
+                trace: new Trace(enabled: false),
+                stdin: $this->stdin,
+                stdout: $this->stdout,
+            );
+
+            $result = $task($scope);
+
+            $response = Response::taskOk($request->id, $result);
+            fwrite($this->stdout, Codec::encode($response));
+            fflush($this->stdout);
+        } catch (\Throwable $e) {
+            $response = Response::taskErr($request->id, $e);
+            fwrite($this->stdout, Codec::encode($response));
+            fflush($this->stdout);
+        }
+    }
+
+    private function instantiateTask(TaskRequest $request): Scopeable|Executable
+    {
+        $class = $request->taskClass;
+
+        if (!class_exists($class)) {
+            throw new \RuntimeException("Task class not found: $class");
+        }
+
+        $reflection = new ReflectionClass($class);
+
+        if (!$reflection->implementsInterface(Scopeable::class) && !$reflection->implementsInterface(Executable::class)) {
+            throw new \RuntimeException("Task must implement Scopeable or Executable: $class");
+        }
+
+        $constructor = $reflection->getConstructor();
+
+        if ($constructor === null) {
+            return $reflection->newInstance();
+        }
+
+        $args = $this->resolveConstructorArgs($constructor->getParameters(), $request->constructorArgs);
+
+        return $reflection->newInstanceArgs($args);
+    }
+
+    /**
+     * @param ReflectionParameter[] $params
+     * @param array<string, mixed> $args
+     * @return list<mixed>
+     */
+    private function resolveConstructorArgs(array $params, array $args): array
+    {
+        $resolved = [];
+
+        foreach ($params as $param) {
+            $name = $param->getName();
+
+            if (array_key_exists($name, $args)) {
+                $resolved[] = $args[$name];
+            } elseif ($param->isDefaultValueAvailable()) {
+                $resolved[] = $param->getDefaultValue();
+            } else {
+                throw new \RuntimeException("Missing required constructor argument: $name");
+            }
+        }
+
+        return $resolved;
+    }
+}
