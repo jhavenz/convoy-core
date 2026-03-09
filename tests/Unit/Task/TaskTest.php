@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Convoy\Tests\Unit\Task;
 
-use Convoy\Scope;
+use Convoy\ExecutionScope;
 use Convoy\Task\Task;
 use Convoy\Task\TaskConfig;
 use InvalidArgumentException;
@@ -16,7 +16,7 @@ final class TaskTest extends TestCase
     #[Test]
     public function accepts_static_closure(): void
     {
-        $task = Task::of(static fn(Scope $s) => 'result');
+        $task = Task::of(static fn(ExecutionScope $es) => 'result');
 
         $this->assertInstanceOf(Task::class, $task);
     }
@@ -27,14 +27,14 @@ final class TaskTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Task closure must be static');
 
-        Task::of(fn(Scope $s) => $this);
+        Task::of(fn(ExecutionScope $es) => $this);
     }
 
     #[Test]
     public function accepts_explicit_self_capture(): void
     {
         $self = $this;
-        $task = Task::of(static fn(Scope $s) => $self);
+        $task = Task::of(static fn(ExecutionScope $es) => $self);
 
         $this->assertInstanceOf(Task::class, $task);
     }
@@ -42,7 +42,7 @@ final class TaskTest extends TestCase
     #[Test]
     public function has_default_config(): void
     {
-        $task = Task::of(static fn(Scope $s) => null);
+        $task = Task::of(static fn(ExecutionScope $es) => null);
 
         $this->assertInstanceOf(TaskConfig::class, $task->config);
         $this->assertSame('', $task->config->name);
@@ -53,7 +53,7 @@ final class TaskTest extends TestCase
     public function accepts_custom_config(): void
     {
         $config = new TaskConfig(name: 'MyTask', priority: 10);
-        $task = Task::create(static fn(Scope $s) => null, $config);
+        $task = Task::create(static fn(ExecutionScope $es) => null, $config);
 
         $this->assertSame('MyTask', $task->config->name);
         $this->assertSame(10, $task->config->priority);
@@ -62,7 +62,7 @@ final class TaskTest extends TestCase
     #[Test]
     public function with_returns_new_task_with_config(): void
     {
-        $task = Task::of(static fn(Scope $s) => 'original');
+        $task = Task::of(static fn(ExecutionScope $es) => 'original');
         $config = new TaskConfig(name: 'Updated');
         $updated = $task->with($config);
 
@@ -73,7 +73,7 @@ final class TaskTest extends TestCase
     #[Test]
     public function withConfig_updates_specific_values(): void
     {
-        $task = Task::of(static fn(Scope $s) => null);
+        $task = Task::of(static fn(ExecutionScope $es) => null);
         $updated = $task->withConfig(name: 'Named', priority: 5);
 
         $this->assertSame('Named', $updated->config->name);

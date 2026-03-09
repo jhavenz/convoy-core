@@ -19,7 +19,7 @@ final readonly class Task implements Dispatchable
         if ($rf->getClosureThis() !== null) {
             throw new InvalidArgumentException(
                 'Task closure must be static to prevent reference cycles. ' .
-                'Use: static fn(Scope $s) => ... or pass $this via use()'
+                'Use: static fn(ExecutionScope $es) => ... or pass $this via use()'
             );
         }
     }

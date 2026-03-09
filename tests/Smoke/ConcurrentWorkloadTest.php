@@ -8,6 +8,7 @@ use Convoy\Application;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Concurrency\Settlement;
 use Convoy\Exception\CancelledException;
+use Convoy\ExecutionScope;
 use Convoy\Scope;
 use Convoy\Task\Dispatchable;
 use Convoy\Task\HasTimeout;
@@ -32,15 +33,15 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $start = hrtime(true);
 
             $results = $scope->concurrent([
-                'fast' => Task::of(static function (Scope $s) {
+                'fast' => Task::of(static function (ExecutionScope $es) {
                     delay(0.01);
                     return 'fast_result';
                 }),
-                'medium' => Task::of(static function (Scope $s) {
+                'medium' => Task::of(static function (ExecutionScope $es) {
                     delay(0.03);
                     return 'medium_result';
                 }),
-                'slow' => Task::of(static function (Scope $s) {
+                'slow' => Task::of(static function (ExecutionScope $es) {
                     delay(0.02);
                     return 'slow_result';
                 }),
@@ -69,10 +70,10 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $settlements = $scope->settle([
-                'success1' => Task::of(static fn(Scope $s) => 'ok1'),
-                'failure1' => Task::of(static fn(Scope $s) => throw new RuntimeException('fail1')),
-                'success2' => Task::of(static fn(Scope $s) => 'ok2'),
-                'failure2' => Task::of(static fn(Scope $s) => throw new RuntimeException('fail2')),
+                'success1' => Task::of(static fn(ExecutionScope $es) => 'ok1'),
+                'failure1' => Task::of(static fn(ExecutionScope $es) => throw new RuntimeException('fail1')),
+                'success2' => Task::of(static fn(ExecutionScope $es) => 'ok2'),
+                'failure2' => Task::of(static fn(ExecutionScope $es) => throw new RuntimeException('fail2')),
             ]);
 
             $this->assertTrue($settlements['success1']->isOk);
@@ -103,15 +104,15 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $result = $scope->race([
-                Task::of(static function (Scope $s) {
+                Task::of(static function (ExecutionScope $es) {
                     delay(0.1);
                     return 'slow';
                 }),
-                Task::of(static function (Scope $s) {
+                Task::of(static function (ExecutionScope $es) {
                     delay(0.005);
                     return 'fast';
                 }),
-                Task::of(static function (Scope $s) {
+                Task::of(static function (ExecutionScope $es) {
                     delay(0.05);
                     return 'medium';
                 }),
@@ -135,12 +136,12 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $result = $scope->any([
-                Task::of(static fn(Scope $s) => throw new RuntimeException('immediate_fail')),
-                Task::of(static function (Scope $s) {
+                Task::of(static fn(ExecutionScope $es) => throw new RuntimeException('immediate_fail')),
+                Task::of(static function (ExecutionScope $es) {
                     delay(0.02);
                     return 'delayed_success';
                 }),
-                Task::of(static function (Scope $s) {
+                Task::of(static function (ExecutionScope $es) {
                     delay(0.01);
                     throw new RuntimeException('delayed_fail');
                 }),
@@ -168,7 +169,7 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $results = $scope->map(
                 range(1, 10),
                 function (int $item) use (&$maxConcurrent, &$currentConcurrent) {
-                    return Task::of(static function (Scope $s) use ($item, &$maxConcurrent, &$currentConcurrent) {
+                    return Task::of(static function (ExecutionScope $es) use ($item, &$maxConcurrent, &$currentConcurrent) {
                         $currentConcurrent++;
                         $maxConcurrent = max($maxConcurrent, $currentConcurrent);
 
@@ -201,7 +202,7 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
 
             $this->expectException(CancelledException::class);
 
-            $scope->timeout(0.01, Task::of(static function (Scope $s) {
+            $scope->timeout(0.01, Task::of(static function (ExecutionScope $es) {
                 delay(1.0);
                 return 'should_not_complete';
             }));
@@ -291,17 +292,17 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $order = [];
 
             $results = $scope->series([
-                Task::of(static function (Scope $s) use (&$order) {
+                Task::of(static function (ExecutionScope $es) use (&$order) {
                     delay(0.02);
                     $order[] = 1;
                     return 'first';
                 }),
-                Task::of(static function (Scope $s) use (&$order) {
+                Task::of(static function (ExecutionScope $es) use (&$order) {
                     delay(0.01);
                     $order[] = 2;
                     return 'second';
                 }),
-                Task::of(static function (Scope $s) use (&$order) {
+                Task::of(static function (ExecutionScope $es) use (&$order) {
                     $order[] = 3;
                     return 'third';
                 }),
@@ -327,7 +328,7 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $deferred = false;
             $mainCompleted = false;
 
-            $scope->defer(Task::of(static function (Scope $s) use (&$deferred) {
+            $scope->defer(Task::of(static function (ExecutionScope $es) use (&$deferred) {
                 delay(0.02);
                 $deferred = true;
             }));
@@ -357,13 +358,13 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $results = $scope->concurrent([
-                'batch1' => Task::of(static fn(Scope $s) => $s->concurrent([
-                    'a' => Task::of(static fn(Scope $inner) => 'a'),
-                    'b' => Task::of(static fn(Scope $inner) => 'b'),
+                'batch1' => Task::of(static fn(ExecutionScope $es) => $s->concurrent([
+                    'a' => Task::of(static fn(ExecutionScope $inner) => 'a'),
+                    'b' => Task::of(static fn(ExecutionScope $inner) => 'b'),
                 ])),
-                'batch2' => Task::of(static fn(Scope $s) => $s->concurrent([
-                    'c' => Task::of(static fn(Scope $inner) => 'c'),
-                    'd' => Task::of(static fn(Scope $inner) => 'd'),
+                'batch2' => Task::of(static fn(ExecutionScope $es) => $s->concurrent([
+                    'c' => Task::of(static fn(ExecutionScope $inner) => 'c'),
+                    'd' => Task::of(static fn(ExecutionScope $inner) => 'd'),
                 ])),
             ]);
 

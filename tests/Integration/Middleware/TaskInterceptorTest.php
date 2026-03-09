@@ -6,6 +6,7 @@ namespace Convoy\Tests\Integration\Middleware;
 
 use Convoy\Application;
 use Convoy\Middleware\TaskMiddleware;
+use Convoy\ExecutionScope;
 use Convoy\Scope;
 use Convoy\Task\Dispatchable;
 use Convoy\Task\Task;
@@ -41,7 +42,7 @@ final class TaskInterceptorTest extends AsyncTestCase
             ->compile();
 
         $scope = $app->createScope();
-        $task = Task::of(static fn(Scope $s) => 'result');
+        $task = Task::of(static fn(ExecutionScope $es) => 'result');
 
         $scope->execute($task);
 
@@ -84,7 +85,7 @@ final class TaskInterceptorTest extends AsyncTestCase
 
         $scope = $app->createScope();
 
-        $scope->execute(Task::of(static function (Scope $s) use (&$executionOrder) {
+        $scope->execute(Task::of(static function (ExecutionScope $es) use (&$executionOrder) {
             $executionOrder[] = 'task';
             return 'result';
         }));
@@ -112,7 +113,7 @@ final class TaskInterceptorTest extends AsyncTestCase
 
         $scope = $app->createScope();
 
-        $result = $scope->execute(Task::of(static fn(Scope $s) => 5));
+        $result = $scope->execute(Task::of(static fn(ExecutionScope $es) => 5));
 
         $this->assertSame(10, $result);
     }
@@ -135,7 +136,7 @@ final class TaskInterceptorTest extends AsyncTestCase
 
         $scope = $app->createScope();
 
-        $result = $scope->execute(Task::of(static function (Scope $s) use (&$taskExecuted) {
+        $result = $scope->execute(Task::of(static function (ExecutionScope $es) use (&$taskExecuted) {
             $taskExecuted = true;
             return 'original';
         }));
@@ -185,7 +186,7 @@ final class TaskInterceptorTest extends AsyncTestCase
         $scope = $app->createScope();
 
         try {
-            $scope->execute(Task::of(static function (Scope $s) {
+            $scope->execute(Task::of(static function (ExecutionScope $es) {
                 throw new RuntimeException('Task failed');
             }));
             $this->fail('Expected RuntimeException');
@@ -217,7 +218,7 @@ final class TaskInterceptorTest extends AsyncTestCase
 
         $scope = $app->createScope();
 
-        $result = $scope->execute(Task::of(static function (Scope $s) {
+        $result = $scope->execute(Task::of(static function (ExecutionScope $es) {
             throw new RuntimeException('Task failed');
         }));
 
@@ -245,7 +246,7 @@ final class TaskInterceptorTest extends AsyncTestCase
 
         $scope = $app->createScope();
 
-        $scope->execute(Task::of(static fn(Scope $s) => 'result'));
+        $scope->execute(Task::of(static fn(ExecutionScope $es) => 'result'));
         $this->assertSame(Task::class, $taskType);
 
         $customTask = new class implements Dispatchable {
@@ -282,7 +283,7 @@ final class TaskInterceptorTest extends AsyncTestCase
 
         $scope = $app->createScope();
 
-        $result = $scope->execute(Task::of(static fn(Scope $s) => 5));
+        $result = $scope->execute(Task::of(static fn(ExecutionScope $es) => 5));
 
         $this->assertSame(11, $result);
     }
@@ -311,8 +312,8 @@ final class TaskInterceptorTest extends AsyncTestCase
 
             $scope = $app->createScope();
 
-            $scope->execute(Task::of(static function (Scope $s) {
-                $s->delay(0.01);
+            $scope->execute(Task::of(static function (ExecutionScope $es) {
+                $es->delay(0.01);
                 return 'delayed';
             }));
 
@@ -329,7 +330,7 @@ final class TaskInterceptorTest extends AsyncTestCase
 
         $scope = $app->createScope();
 
-        $result = $scope->execute(Task::of(static fn(Scope $s) => 42));
+        $result = $scope->execute(Task::of(static fn(ExecutionScope $es) => 42));
 
         $this->assertSame(42, $result);
     }

@@ -6,6 +6,7 @@ namespace Convoy\Tests\Integration\Task;
 
 use Convoy\Application;
 use Convoy\Concurrency\RetryPolicy;
+use Convoy\ExecutionScope;
 use Convoy\Scope;
 use Convoy\Task\Dispatchable;
 use Convoy\Task\HasTimeout;
@@ -25,7 +26,7 @@ final class TaskExecutionTest extends AsyncTestCase
         $app = Application::starting()->compile();
         $scope = $app->createScope();
 
-        $task = Task::of(static fn(Scope $s) => 42);
+        $task = Task::of(static fn(ExecutionScope $es) => 42);
         $result = $scope->execute($task);
 
         $this->assertSame(42, $result);
@@ -160,7 +161,7 @@ final class TaskExecutionTest extends AsyncTestCase
         $app = Application::starting(['CONVOY_TRACE' => '1'])->compile();
         $scope = $app->createScope();
 
-        $task = Task::of(static fn(Scope $s) => 'named')->withConfig(name: 'ConfiguredTask');
+        $task = Task::of(static fn(ExecutionScope $es) => 'named')->withConfig(name: 'ConfiguredTask');
 
         $scope->execute($task);
 
@@ -176,7 +177,7 @@ final class TaskExecutionTest extends AsyncTestCase
         $app = Application::starting()->compile();
         $scope = $app->createScope();
 
-        $task = Task::of(static fn(Scope $s) => spl_object_id($s));
+        $task = Task::of(static fn(ExecutionScope $es) => spl_object_id($es));
 
         $id1 = $scope->execute($task);
         $id2 = $scope->executeFresh($task);

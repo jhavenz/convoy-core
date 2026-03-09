@@ -8,12 +8,12 @@ use Closure;
 use Convoy\Concurrency\CancellationToken;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Concurrency\SettlementBag;
-use Convoy\Scope;
+use Convoy\ExecutionScope;
 use Convoy\Task\Dispatchable;
 use Convoy\Trace\Trace;
 use RuntimeException;
 
-final class DeferredScope implements Scope
+final class DeferredScope implements ExecutionScope
 {
     public bool $isCancelled {
         get => $this->scope()->isCancelled;
@@ -128,7 +128,7 @@ final class DeferredScope implements Scope
         $this->scope()->defer($task);
     }
 
-    public function withAttribute(string $key, mixed $value): Scope
+    public function withAttribute(string $key, mixed $value): ExecutionScope
     {
         return $this->scope()->withAttribute($key, $value);
     }
@@ -138,7 +138,7 @@ final class DeferredScope implements Scope
         return $this->scope()->attribute($key, $default);
     }
 
-    private function scope(): Scope
+    private function scope(): ExecutionScope
     {
         return FiberScopeRegistry::current()
             ?? throw new RuntimeException('No scope registered for current fiber context');

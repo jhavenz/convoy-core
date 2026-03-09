@@ -53,12 +53,28 @@ final class Application implements AppHost
         return $this->serviceProviders;
     }
 
-    public function createScope(?CancellationToken $token = null): Scope
+    public function createScope(?CancellationToken $token = null): ExecutionScope
     {
-        return new ExecutionScope(
+        return new ExecutionLifecycleScope(
             $this->graph,
             $this->singletons,
             $token ?? CancellationToken::none(),
+            $this->trace,
+            $this->taskInterceptors,
+        );
+    }
+
+    /**
+     * Application-level scope for file loading and service resolution.
+     *
+     * Returns a minimal Scope (no execution) for handler file closures.
+     */
+    public function scope(): Scope
+    {
+        return new ExecutionLifecycleScope(
+            $this->graph,
+            $this->singletons,
+            CancellationToken::none(),
             $this->trace,
             $this->taskInterceptors,
         );

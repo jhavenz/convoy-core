@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Convoy\Tests\Integration\Scope;
 
 use Convoy\Application;
-use Convoy\Scope;
+use Convoy\ExecutionScope;
 use Convoy\Task\Task;
 use Convoy\Tests\Support\AsyncTestCase;
 use PHPUnit\Framework\Attributes\Test;
@@ -24,15 +24,15 @@ final class ScopeConcurrencyTest extends AsyncTestCase
             $start = hrtime(true);
 
             $results = $scope->concurrent([
-                'a' => Task::of(static function (Scope $s) {
+                'a' => Task::of(static function (ExecutionScope $es) {
                     delay(0.05);
                     return 'result_a';
                 }),
-                'b' => Task::of(static function (Scope $s) {
+                'b' => Task::of(static function (ExecutionScope $es) {
                     delay(0.05);
                     return 'result_b';
                 }),
-                'c' => Task::of(static function (Scope $s) {
+                'c' => Task::of(static function (ExecutionScope $es) {
                     delay(0.05);
                     return 'result_c';
                 }),
@@ -57,7 +57,7 @@ final class ScopeConcurrencyTest extends AsyncTestCase
 
             $results = $scope->map(
                 range(1, 5),
-                fn(int $item) => Task::of(static fn(Scope $s) => $item * 2),
+                fn(int $item) => Task::of(static fn(ExecutionScope $es) => $item * 2),
                 limit: 2,
             );
 
@@ -75,11 +75,11 @@ final class ScopeConcurrencyTest extends AsyncTestCase
             $order = [];
 
             $results = $scope->series([
-                Task::of(static function (Scope $s) use (&$order) {
+                Task::of(static function (ExecutionScope $es) use (&$order) {
                     $order[] = 1;
                     return 'a';
                 }),
-                Task::of(static function (Scope $s) use (&$order) {
+                Task::of(static function (ExecutionScope $es) use (&$order) {
                     $order[] = 2;
                     return 'b';
                 }),
@@ -99,8 +99,8 @@ final class ScopeConcurrencyTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $settlements = $scope->settle([
-                'success' => Task::of(static fn(Scope $s) => 'ok'),
-                'failure' => Task::of(static fn(Scope $s) => throw new \RuntimeException('fail')),
+                'success' => Task::of(static fn(ExecutionScope $es) => 'ok'),
+                'failure' => Task::of(static fn(ExecutionScope $es) => throw new \RuntimeException('fail')),
             ]);
 
             $this->assertTrue($settlements['success']->isOk);
@@ -118,11 +118,11 @@ final class ScopeConcurrencyTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $result = $scope->race([
-                Task::of(static function (Scope $s) {
+                Task::of(static function (ExecutionScope $es) {
                     delay(0.1);
                     return 'slow';
                 }),
-                Task::of(static function (Scope $s) {
+                Task::of(static function (ExecutionScope $es) {
                     delay(0.01);
                     return 'fast';
                 }),
@@ -141,12 +141,12 @@ final class ScopeConcurrencyTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $result = $scope->any([
-                Task::of(static fn(Scope $s) => throw new \RuntimeException('fail1')),
-                Task::of(static function (Scope $s) {
+                Task::of(static fn(ExecutionScope $es) => throw new \RuntimeException('fail1')),
+                Task::of(static function (ExecutionScope $es) {
                     delay(0.02);
                     return 'success';
                 }),
-                Task::of(static fn(Scope $s) => throw new \RuntimeException('fail2')),
+                Task::of(static fn(ExecutionScope $es) => throw new \RuntimeException('fail2')),
             ]);
 
             $this->assertSame('success', $result);
@@ -162,9 +162,9 @@ final class ScopeConcurrencyTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $result = $scope->waterfall([
-                Task::of(static fn(Scope $s) => 1),
-                Task::of(static fn(Scope $s) => $s->attribute('_waterfall_previous') + 10),
-                Task::of(static fn(Scope $s) => $s->attribute('_waterfall_previous') * 2),
+                Task::of(static fn(ExecutionScope $es) => 1),
+                Task::of(static fn(ExecutionScope $es) => $es->attribute('_waterfall_previous') + 10),
+                Task::of(static fn(ExecutionScope $es) => $es->attribute('_waterfall_previous') * 2),
             ]);
 
             $this->assertSame(22, $result);
@@ -180,7 +180,7 @@ final class ScopeConcurrencyTest extends AsyncTestCase
             $scope = $app->createScope();
             $executed = false;
 
-            $scope->defer(Task::of(static function (Scope $s) use (&$executed) {
+            $scope->defer(Task::of(static function (ExecutionScope $es) use (&$executed) {
                 $executed = true;
             }));
 
@@ -212,7 +212,7 @@ final class ScopeConcurrencyTest extends AsyncTestCase
 
             $this->expectException(\Convoy\Exception\CancelledException::class);
 
-            $scope->timeout(0.01, Task::of(static function (Scope $s) {
+            $scope->timeout(0.01, Task::of(static function (ExecutionScope $es) {
                 delay(1.0);
                 return 'never';
             }));

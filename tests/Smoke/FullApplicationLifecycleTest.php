@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Convoy\Tests\Smoke;
 
 use Convoy\Application;
+use Convoy\ExecutionScope;
 use Convoy\Scope;
 use Convoy\Service\ServiceBundle;
 use Convoy\Service\Services;
@@ -81,13 +82,13 @@ final class FullApplicationLifecycleTest extends AsyncTestCase
         $this->runAsync(function () use ($app, &$events): void {
             $scope = $app->createScope();
 
-            $result = $scope->execute(Task::of(static function (Scope $s) use (&$events) {
+            $result = $scope->execute(Task::of(static function (ExecutionScope $es) use (&$events) {
                 $events[] = 'task:start';
 
-                $db = $s->service(DatabaseConnection::class);
+                $db = $es->service(DatabaseConnection::class);
                 $events[] = 'task:db_used';
 
-                $requestCtx = $s->service(RequestContext::class);
+                $requestCtx = $es->service(RequestContext::class);
                 $events[] = 'task:request_used';
 
                 return 'completed';
@@ -159,8 +160,8 @@ final class FullApplicationLifecycleTest extends AsyncTestCase
         $this->runAsync(function () use ($app): void {
             $scope = $app->createScope();
 
-            $outerTask = Task::of(static function (Scope $s) {
-                $innerResult = $s->execute(Task::of(static fn(Scope $inner) => 'inner'));
+            $outerTask = Task::of(static function (ExecutionScope $es) {
+                $innerResult = $es->execute(Task::of(static fn(ExecutionScope $inner) => 'inner'));
                 return "outer:$innerResult";
             });
 
@@ -212,9 +213,9 @@ final class FullApplicationLifecycleTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $result = $scope->waterfall([
-                Task::of(static fn(Scope $s) => 10),
-                Task::of(static fn(Scope $s) => $s->attribute('_waterfall_previous') + 5),
-                Task::of(static fn(Scope $s) => $s->attribute('_waterfall_previous') * 2),
+                Task::of(static fn(ExecutionScope $es) => 10),
+                Task::of(static fn(ExecutionScope $es) => $es->attribute('_waterfall_previous') + 5),
+                Task::of(static fn(ExecutionScope $es) => $es->attribute('_waterfall_previous') * 2),
             ]);
 
             $this->assertSame(30, $result);

@@ -13,18 +13,22 @@ Requires PHP 8.4+.
 ## Quick Start
 
 ```php
+<?php
+
 $app = Application::starting()->providers(new AppBundle())->compile();
 $app->startup();
 
 $scope = $app->createScope();
 
-$result = $scope->execute(Task::of(static fn(Scope $s) =>
+$result = $scope->execute(Task::of(static fn(ExecutionScope $s) =>
     $s->service(OrderService::class)->process(42)
 ));
 
 $scope->dispose();
 $app->shutdown();
 ```
+
+**Note:** Service classes like `OrderService`, `UserRepo`, `DatabasePool` in these examples are illustrative. Convoy Core provides the coordination primitives—your application brings the domain logic.
 
 ## How It Works
 
@@ -34,7 +38,7 @@ Convoy's model: **Application -> Scope -> Tasks**.
 Application::starting($context)
     -> compile()           // Validate service graph, create app
     -> startup()           // Run startup hooks, enable shutdown handlers
-    -> createScope()       // Create execution context
+    -> createScope()       // Create ExecutionScope
     -> execute(Task)       // Run typed tasks
     -> dispose()           // Cleanup scope resources
     -> shutdown()          // Cleanup app resources
@@ -43,19 +47,49 @@ Application::starting($context)
 Every task implements `Dispatchable`—a single-method interface:
 
 ```php
+<?php
+
 interface Dispatchable {
     public function __invoke(Scope $scope): mixed;
 }
 ```
 
-The scope provides everything: service resolution, concurrency primitives, cancellation state, disposal hooks. No global state. No service locator. No hidden context.
+### Scope Hierarchy
 
-**Why this matters:**
+Convoy splits scope into two interfaces:
 
-- **Testable**: Mock the scope, test the task. No framework coupling.
-- **Explicit**: Dependencies flow through the argument, not magic injection.
-- **Fiber-safe**: Each task runs on its own fiber with the scope automatically available.
-- **Composable**: Tasks spawn subtasks with the same signature—`concurrent()`, `race()`, `map()` all pass the scope through.
+| Interface | Purpose |
+|-----------|---------|
+| `Scope` | Service resolution, attributes, tracing |
+| `ExecutionScope` | Extends Scope with concurrency, cancellation, disposal |
+
+**Scope** is the minimal interface for most code—service access and attribute passing.
+
+**ExecutionScope** adds execution capabilities: `concurrent()`, `race()`, `execute()`, `throwIfCancelled()`, `dispose()`.
+
+```php
+<?php
+
+// Scope: minimal interface
+interface Scope {
+    public function service(string $type): object;
+    public function attribute(string $key, mixed $default = null): mixed;
+    public function withAttribute(string $key, mixed $value): Scope;
+    public function trace(): Trace;
+}
+
+// ExecutionScope: full execution capabilities
+interface ExecutionScope extends Scope {
+    public bool $isCancelled { get; }
+    public function execute(Dispatchable $task): mixed;
+    public function concurrent(array $tasks): array;
+    public function throwIfCancelled(): void;
+    public function onDispose(Closure $callback): void;
+    // ... and more
+}
+```
+
+Handler closures receive `ExecutionScope` for full concurrency control. File loading receives `Scope` for service resolution.
 
 ## The Task System
 
@@ -64,13 +98,17 @@ The scope provides everything: service resolution, concurrency primitives, cance
 **Quick tasks** for one-offs:
 
 ```php
-$task = Task::of(static fn(Scope $s) => $s->service(UserRepo::class)->find($id));
+<?php
+
+$task = Task::of(static fn(ExecutionScope $s) => $s->service(UserRepo::class)->find($id));
 $user = $scope->execute($task);
 ```
 
 **Invokable classes** for everything else:
 
 ```php
+<?php
+
 final readonly class FetchUser implements Dispatchable
 {
     public function __construct(private int $id) {}
@@ -96,6 +134,8 @@ The invokable approach gives you:
 Tasks declare behavior through PHP 8.4 property hooks:
 
 ```php
+<?php
+
 final class DatabaseQuery implements Dispatchable, Retryable, HasTimeout
 {
     public RetryPolicy $retryPolicy {
@@ -123,19 +163,6 @@ The behavior pipeline applies automatically: **timeout wraps retry wraps trace w
 | `UsesPool` | `UnitEnum $pool { get; }` | Pool-aware scheduling |
 | `Traceable` | `string $traceName { get; }` | Custom trace label |
 
-### Task Configuration
-
-For `Task::of()` closures, attach behavior via config:
-
-```php
-$task = Task::create(
-    static fn(Scope $s) => $s->service(Api::class)->fetch($url),
-    TaskConfig::default()
-        ->withTimeout(5.0)
-        ->withRetry(RetryPolicy::exponential(3))
-);
-```
-
 ## Concurrency Primitives
 
 | Method | Behavior | Returns |
@@ -150,6 +177,8 @@ $task = Task::create(
 | `waterfall($tasks)` | Sequential, passing result forward | Final result |
 
 ```php
+<?php
+
 // Parallel fetch
 [$customer, $inventory] = $scope->concurrent([
     new FetchCustomer($customerId),
@@ -164,18 +193,106 @@ $data = $scope->any([
 
 // 10,000 items. 10 concurrent workers.
 $results = $scope->map($items, fn($item) => new ProcessItem($item), limit: 10);
+```
 
-// Collect all outcomes, even failures
-$bag = $scope->settle([
-    'primary' => new FetchFromPrimary($key),
-    'backup' => new FetchFromBackup($key),
+## Route Groups
+
+Typed collections of HTTP routes with `RouteGroup`:
+
+```php
+<?php
+// routes/api.php
+
+use Convoy\Http\Route;
+use Convoy\Http\RouteGroup;
+use Convoy\Scope;
+use Convoy\ExecutionScope;
+
+return static fn(Scope $s): RouteGroup => RouteGroup::of([
+    'GET /users' => new Route(
+        fn: static fn(ExecutionScope $es) => $es->service(UserRepo::class)->all(),
+    ),
+    'GET /users/{id}' => new Route(
+        fn: static fn(ExecutionScope $es) => $es->service(UserRepo::class)->find(
+            (int) $es->attribute('route.id')
+        ),
+    ),
+    'POST /users' => new Route(
+        fn: static fn(ExecutionScope $es) => $es->service(UserRepo::class)->create(
+            $es->attribute('request.body')
+        ),
+        config: new RouteConfig(timeout: 5.0),
+    ),
 ]);
-// $bag->get('primary', $fallback), $bag->allOk, $bag->anyErr
+```
+
+### Loading Routes
+
+```php
+<?php
+
+use Convoy\Handler\HandlerLoader;
+use Convoy\Runner\HttpRunner;
+
+$routes = HandlerLoader::loadRouteDirectory(__DIR__ . '/routes', $app->scope());
+$runner = HttpRunner::withRoutes($app, $routes, requestTimeout: 30.0);
+$runner->run('0.0.0.0:8080');
+```
+
+### Composing Route Groups
+
+```php
+<?php
+
+$api = RouteGroup::create()
+    ->merge($publicRoutes)
+    ->mount('/admin', $adminRoutes)
+    ->wrap(new AuthMiddleware());
+```
+
+## Command Groups
+
+Typed collections of CLI commands with `CommandGroup`:
+
+```php
+<?php
+// commands/db.php
+
+use Convoy\Console\Command;
+use Convoy\Console\CommandGroup;
+use Convoy\Console\CommandConfig;
+use Convoy\Scope;
+use Convoy\ExecutionScope;
+
+return static fn(Scope $s): CommandGroup => CommandGroup::of([
+    'migrate' => new Command(
+        fn: static fn(ExecutionScope $es) => $es->service(Migrator::class)->run(),
+        config: new CommandConfig(description: 'Run database migrations'),
+    ),
+    'db:seed' => new Command(
+        fn: static fn(ExecutionScope $es) => $es->service(Seeder::class)->run(),
+    ),
+]);
+```
+
+### Running Commands
+
+```php
+<?php
+
+use Convoy\Handler\HandlerLoader;
+use Convoy\Runner\ConsoleRunner;
+
+$commands = HandlerLoader::loadCommandDirectory(__DIR__ . '/commands', $app->scope());
+$runner = ConsoleRunner::withCommands($app, $commands);
+exit($runner->run($argv));
 ```
 
 ## Services
 
 ```php
+<?php
+
 use Convoy\Service\ServiceBundle;
 use Convoy\Service\Services;
 
@@ -188,56 +305,29 @@ class AppBundle implements ServiceBundle
             ->onStartup(fn($pool) => $pool->warmUp(5))
             ->onShutdown(fn($pool) => $pool->drain());
 
-        $services->singleton(UserRepo::class)
-            ->needs(DatabasePool::class)
-            ->factory(fn($pool) => new UserRepo($pool));
-
         $services->scoped(RequestLogger::class)
             ->lazy()
-            ->factory(fn() => new RequestLogger())
             ->onDispose(fn($log) => $log->flush());
     }
 }
 ```
 
-**Scoping:**
-
 | Method | Lifecycle |
 |--------|-----------|
 | `singleton()` | One instance per application |
 | `scoped()` | One instance per scope, disposed with scope |
-| `eager()` | Singleton created at startup (not lazily) |
 | `lazy()` | Defer creation until first access (PHP 8.4 lazy ghosts) |
-
-**Lifecycle hooks:**
-
-| Hook | When | Use case |
-|------|------|----------|
-| `onInit` | After factory creates instance | Validation, logging |
-| `onStartup` | Application startup | Connection warming, cache priming |
-| `onDispose` | Scope disposal (reverse order) | Request cleanup |
-| `onShutdown` | Application shutdown (reverse order) | Connection draining |
-
-**Compile-time validation catches:**
-
-- Missing dependencies
-- Cyclic dependencies
-- Singletons depending on scoped services (captive dependency)
-- Interface bindings with missing implementations
 
 ## Cancellation & Retry
 
 ```php
+<?php
+
 use Convoy\Concurrency\CancellationToken;
 use Convoy\Concurrency\RetryPolicy;
 
 // Timeout for entire scope
 $scope = $app->createScope(CancellationToken::timeout(30.0));
-
-// Manual cancellation
-$token = CancellationToken::create();
-$scope = $app->createScope($token);
-// Later: $token->cancel();
 
 // Task-level timeout
 $result = $scope->timeout(5.0, new SlowApiCall($id));
@@ -246,7 +336,6 @@ $result = $scope->timeout(5.0, new SlowApiCall($id));
 $result = $scope->retry(
     new FetchFromApi($url),
     RetryPolicy::exponential(attempts: 3)
-        ->retryingOn(ConnectionException::class, TimeoutException::class)
 );
 
 // Check cancellation within tasks
@@ -254,47 +343,15 @@ final class LongRunningTask implements Dispatchable
 {
     public function __invoke(Scope $scope): mixed
     {
-        foreach ($this->chunks as $chunk) {
-            $scope->throwIfCancelled();  // Throws CancelledException
-            $this->process($chunk);
+        if ($scope instanceof ExecutionScope) {
+            foreach ($this->chunks as $chunk) {
+                $scope->throwIfCancelled();
+                $this->process($chunk);
+            }
         }
-
         return $this->result;
     }
 }
-```
-
-## Runners
-
-### HTTP Server
-
-```php
-use Convoy\Runner\HttpRunner;
-
-$handler = Task::of(static fn(Scope $s) =>
-    $s->service(Router::class)->dispatch($s->attribute('request'))
-);
-
-$runner = new HttpRunner($app, $handler, requestTimeout: 30.0);
-$runner->run('0.0.0.0:8080');  // Blocks, runs event loop
-```
-
-### Console Commands
-
-```php
-use Convoy\Runner\ConsoleRunner;
-
-$runner = new ConsoleRunner($app);
-
-$runner->command('migrate', Task::of(static fn(Scope $s) =>
-    $s->service(Migrator::class)->run()
-));
-
-$runner->command('cache:clear', Task::of(static fn(Scope $s) =>
-    $s->service(Cache::class)->clear()
-));
-
-exit($runner->run($argv));
 ```
 
 ## Tracing
@@ -306,44 +363,46 @@ CONVOY_TRACE=1 php server.php
 ```
     0ms  STRT  compiling
     4ms  STRT  startup
-    4ms  STRT  ready
     6ms  CON>    concurrent(2)
     7ms  EXEC    FetchCustomer
     8ms  DONE    FetchCustomer  +0.61ms
-    8ms  EXEC    ValidateInventory
-   19ms  DONE    ValidateInventory  +10.6ms
    19ms  CON<    concurrent(2) joined  +12.8ms
 
 0 svc  4.0MB peak  0 gc  39.8ms total
 ```
 
-Invokable tasks display with their class name. Closures show file and line. Concurrent blocks indent their children.
-
 ## Deterministic Cleanup
 
-Resource cleanup in async PHP requires discipline. Convoy treats it as first-class:
-
-**Scope-level cleanup:**
-
 ```php
-$scope = $app->createScope();
+<?php
 
+$scope = $app->createScope();
 $scope->onDispose(fn() => $connection->close());
-$scope->onDispose(fn() => $transaction->rollback());
 
 // Your task code...
 
-$scope->dispose();  // Cleanup fires in reverse order, guaranteed
+$scope->dispose();  // Cleanup fires in reverse order
 ```
 
-**Task-level cleanup with fresh scopes:**
+## Examples
 
-```php
-// executeFresh creates a child scope that auto-disposes after the task
-$result = $scope->executeFresh(new ProcessWithTempResources($data));
-// Child scope's onDispose hooks fire automatically
+The `examples/` directory contains runnable examples:
+
+**HTTP Server** (`examples/http-server.php`):
+- Concurrent stock price API reading 10 CSVs in parallel
+- RouteGroup, route parameters, bounded parallelism with `$scope->map()`
+
+**Console App** (`examples/console-app.php`):
+- Stock analysis CLI with `aggregate`, `compare`, and `top` commands
+- `$scope->concurrent()`, invokable task classes with `Traceable`
+
+```bash
+# HTTP server
+CONVOY_TRACE=1 php examples/http-server.php
+
+# Console commands
+CONVOY_TRACE=1 php examples/console-app.php aggregate
+CONVOY_TRACE=1 php examples/console-app.php compare AAPL GOOGL
 ```
 
-## What's Next
-
-HTTP client abstractions, database connection pooling, and queue workers are in development. The foundation you learn here carries forward.
+See `examples/README.md` for full details.

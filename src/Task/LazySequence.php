@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Convoy\Task;
 
 use Closure;
+use Convoy\ExecutionScope;
 use Convoy\Scope;
 use Generator;
 
@@ -22,7 +23,7 @@ final readonly class LazySequence implements Dispatchable
 
     public static function of(iterable $items): self
     {
-        return new self(static function (Scope $s) use ($items): Generator {
+        return new self(static function (ExecutionScope $s) use ($items): Generator {
             yield from $items;
         });
     }
@@ -30,7 +31,7 @@ final readonly class LazySequence implements Dispatchable
     public function map(Closure $fn): self
     {
         $source = $this->factory;
-        return new self(static function (Scope $s) use ($source, $fn): Generator {
+        return new self(static function (ExecutionScope $s) use ($source, $fn): Generator {
             foreach ($source($s) as $key => $value) {
                 $s->throwIfCancelled();
                 yield $key => $fn($value, $key, $s);
@@ -41,7 +42,7 @@ final readonly class LazySequence implements Dispatchable
     public function filter(Closure $predicate): self
     {
         $source = $this->factory;
-        return new self(static function (Scope $s) use ($source, $predicate): Generator {
+        return new self(static function (ExecutionScope $s) use ($source, $predicate): Generator {
             foreach ($source($s) as $key => $value) {
                 $s->throwIfCancelled();
                 if ($predicate($value, $key, $s)) {
@@ -54,7 +55,7 @@ final readonly class LazySequence implements Dispatchable
     public function take(int $n): self
     {
         $source = $this->factory;
-        return new self(static function (Scope $s) use ($source, $n): Generator {
+        return new self(static function (ExecutionScope $s) use ($source, $n): Generator {
             $count = 0;
             foreach ($source($s) as $key => $value) {
                 if ($count >= $n) {
@@ -70,7 +71,7 @@ final readonly class LazySequence implements Dispatchable
     public function chunk(int $size): self
     {
         $source = $this->factory;
-        return new self(static function (Scope $s) use ($source, $size): Generator {
+        return new self(static function (ExecutionScope $s) use ($source, $size): Generator {
             $chunk = [];
             foreach ($source($s) as $value) {
                 $s->throwIfCancelled();
@@ -89,7 +90,7 @@ final readonly class LazySequence implements Dispatchable
     public function mapConcurrent(Closure $fn, int $concurrency = 10): self
     {
         $source = $this->factory;
-        return new self(static function (Scope $s) use ($source, $fn, $concurrency): Generator {
+        return new self(static function (ExecutionScope $s) use ($source, $fn, $concurrency): Generator {
             $batch = [];
             foreach ($source($s) as $key => $value) {
                 $batch[$key] = $value;

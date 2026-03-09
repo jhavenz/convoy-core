@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Convoy\Service;
 
-use Convoy\Scope;
+use Convoy\ExecutionScope;
 use Fiber;
 use WeakMap;
 
 final class FiberScopeRegistry
 {
-    /** @var WeakMap<object, Scope> */
+    /** @var WeakMap<object, ExecutionScope> */
     private static WeakMap $scopes;
 
-    private static ?Scope $mainScope = null;
+    private static ?ExecutionScope $mainScope = null;
 
     private static bool $initialized = false;
 
-    public static function register(Scope $scope): void
+    public static function register(ExecutionScope $scope): void
     {
         self::init();
 
@@ -45,7 +45,7 @@ final class FiberScopeRegistry
         unset(self::$scopes[$fiber]);
     }
 
-    public static function current(): ?Scope
+    public static function current(): ?ExecutionScope
     {
         self::init();
 

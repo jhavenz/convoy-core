@@ -18,6 +18,14 @@ use React\Http\Message\Response;
 use React\Socket\SocketServer;
 use Symfony\Component\Runtime\RunnerInterface;
 
+/**
+ * Symfony Runtime HTTP runner using ReactPHP.
+ *
+ * @migration convoy/http
+ *
+ * Will migrate to the convoy/http library along with request handling,
+ * routing, and middleware infrastructure.
+ */
 final class ConvoyHttpRunner implements RunnerInterface
 {
     private ?HttpServer $server = null;

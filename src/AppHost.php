@@ -13,7 +13,7 @@ interface AppHost
     /** @return list<ServiceBundle> */
     public function providers(): array;
 
-    public function createScope(?CancellationToken $token = null): Scope;
+    public function createScope(?CancellationToken $token = null): ExecutionScope;
 
     public function startup(): void;
 
