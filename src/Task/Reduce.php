@@ -6,9 +6,8 @@ namespace Convoy\Task;
 
 use Closure;
 use Convoy\ExecutionScope;
-use Convoy\Scope;
 
-final readonly class Reduce implements Dispatchable
+final readonly class Reduce implements Executable
 {
     public function __construct(
         private LazySequence $sequence,
@@ -17,12 +16,8 @@ final readonly class Reduce implements Dispatchable
     ) {
     }
 
-    public function __invoke(Scope $scope): mixed
+    public function __invoke(ExecutionScope $scope): mixed
     {
-        if (!$scope instanceof ExecutionScope) {
-            throw new \RuntimeException('Reduce requires ExecutionScope for cancellation checking');
-        }
-
         $accumulator = $this->initial;
 
         foreach ($this->sequence($scope) as $key => $value) {

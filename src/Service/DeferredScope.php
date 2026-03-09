@@ -9,7 +9,8 @@ use Convoy\Concurrency\CancellationToken;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Concurrency\SettlementBag;
 use Convoy\ExecutionScope;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 use Convoy\Trace\Trace;
 use RuntimeException;
 
@@ -24,18 +25,18 @@ final class DeferredScope implements ExecutionScope
         return $this->scope()->service($type);
     }
 
-    public function execute(Dispatchable $task): mixed
+    public function execute(Scopeable|Executable $task): mixed
     {
         return $this->scope()->execute($task);
     }
 
-    public function executeFresh(Dispatchable $task): mixed
+    public function executeFresh(Scopeable|Executable $task): mixed
     {
         return $this->scope()->executeFresh($task);
     }
 
     /**
-     * @param array<string|int, Dispatchable> $tasks
+     * @param array<string|int, Scopeable|Executable> $tasks
      * @return array<string|int, mixed>
      */
     public function concurrent(array $tasks): array
@@ -43,13 +44,13 @@ final class DeferredScope implements ExecutionScope
         return $this->scope()->concurrent($tasks);
     }
 
-    /** @param array<string|int, Dispatchable> $tasks */
+    /** @param array<string|int, Scopeable|Executable> $tasks */
     public function race(array $tasks): mixed
     {
         return $this->scope()->race($tasks);
     }
 
-    /** @param array<string|int, Dispatchable> $tasks */
+    /** @param array<string|int, Scopeable|Executable> $tasks */
     public function any(array $tasks): mixed
     {
         return $this->scope()->any($tasks);
@@ -65,7 +66,7 @@ final class DeferredScope implements ExecutionScope
     }
 
     /**
-     * @param list<Dispatchable> $tasks
+     * @param list<Scopeable|Executable> $tasks
      * @return list<mixed>
      */
     public function series(array $tasks): array
@@ -83,7 +84,7 @@ final class DeferredScope implements ExecutionScope
         $this->scope()->delay($seconds);
     }
 
-    public function retry(Dispatchable $task, RetryPolicy $policy): mixed
+    public function retry(Scopeable|Executable $task, RetryPolicy $policy): mixed
     {
         return $this->scope()->retry($task, $policy);
     }
@@ -93,7 +94,7 @@ final class DeferredScope implements ExecutionScope
         return $this->scope()->settle($tasks);
     }
 
-    public function timeout(float $seconds, Dispatchable $task): mixed
+    public function timeout(float $seconds, Scopeable|Executable $task): mixed
     {
         return $this->scope()->timeout($seconds, $task);
     }
@@ -123,7 +124,7 @@ final class DeferredScope implements ExecutionScope
         return $this->scope()->trace();
     }
 
-    public function defer(Dispatchable $task): void
+    public function defer(Scopeable|Executable $task): void
     {
         $this->scope()->defer($task);
     }

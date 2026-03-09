@@ -7,7 +7,7 @@ namespace Convoy\Task;
 use Closure;
 use Convoy\Scope;
 
-final readonly class Transform implements Dispatchable
+final readonly class Transform implements Scopeable
 {
     public function __construct(
         private mixed $input,

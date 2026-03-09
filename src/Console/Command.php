@@ -6,7 +6,7 @@ namespace Convoy\Console;
 
 use Closure;
 use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Scopeable;
 
 /**
  * CLI command handler as an invokable with fn + config.
@@ -14,7 +14,7 @@ use Convoy\Task\Dispatchable;
  * Commands are defined with a closure that receives ExecutionScope at dispatch time.
  * File loading receives Scope; handler execution receives ExecutionScope.
  */
-final readonly class Command implements Dispatchable
+final readonly class Command implements Scopeable
 {
     public function __construct(
         public Closure $fn,

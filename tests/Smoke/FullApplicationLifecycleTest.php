@@ -9,7 +9,7 @@ use Convoy\ExecutionScope;
 use Convoy\Scope;
 use Convoy\Service\ServiceBundle;
 use Convoy\Service\Services;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Scopeable;
 use Convoy\Task\Task;
 use Convoy\Tests\Support\AsyncTestCase;
 use PHPUnit\Framework\Attributes\Test;
@@ -290,7 +290,7 @@ class Calculator
     }
 }
 
-class AddNumbers implements Dispatchable
+class AddNumbers implements Scopeable
 {
     public function __construct(
         private readonly int $a,

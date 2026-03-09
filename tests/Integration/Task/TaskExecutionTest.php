@@ -8,10 +8,11 @@ use Convoy\Application;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\ExecutionScope;
 use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
 use Convoy\Task\HasTimeout;
 use Convoy\Task\Pool;
 use Convoy\Task\Retryable;
+use Convoy\Task\Scopeable;
 use Convoy\Task\Task;
 use Convoy\Task\Traceable;
 use Convoy\Task\UsesPool;
@@ -38,7 +39,7 @@ final class TaskExecutionTest extends AsyncTestCase
         $app = Application::starting()->compile();
         $scope = $app->createScope();
 
-        $task = new class implements Dispatchable {
+        $task = new class implements Scopeable {
             public function __invoke(Scope $scope): string
             {
                 return 'invokable result';
@@ -59,7 +60,7 @@ final class TaskExecutionTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $attempts = 0;
-            $task = new class($attempts) implements Dispatchable, Retryable {
+            $task = new class($attempts) implements Scopeable, Retryable {
                 public RetryPolicy $retryPolicy {
                     get => RetryPolicy::fixed(3, 1);
                 }
@@ -91,12 +92,12 @@ final class TaskExecutionTest extends AsyncTestCase
         $this->runAsync(function () use ($app): void {
             $scope = $app->createScope();
 
-            $task = new class implements Dispatchable, HasTimeout {
+            $task = new class implements Executable, HasTimeout {
                 public float $timeout {
                     get => 0.01;
                 }
 
-                public function __invoke(Scope $scope): mixed
+                public function __invoke(ExecutionScope $scope): mixed
                 {
                     $scope->delay(1.0);
                     return null;
@@ -114,7 +115,7 @@ final class TaskExecutionTest extends AsyncTestCase
         $app = Application::starting(['CONVOY_TRACE' => '1'])->compile();
         $scope = $app->createScope();
 
-        $task = new class implements Dispatchable, Traceable {
+        $task = new class implements Scopeable, Traceable {
             public string $traceName {
                 get => 'MyCustomTask';
             }
@@ -139,7 +140,7 @@ final class TaskExecutionTest extends AsyncTestCase
         $app = Application::starting()->compile();
         $scope = $app->createScope();
 
-        $task = new class implements Dispatchable, UsesPool {
+        $task = new class implements Scopeable, UsesPool {
             public \UnitEnum $pool {
                 get => Pool::Database;
             }

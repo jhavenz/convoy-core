@@ -10,9 +10,10 @@ use Convoy\Concurrency\Settlement;
 use Convoy\Exception\CancelledException;
 use Convoy\ExecutionScope;
 use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
 use Convoy\Task\HasTimeout;
 use Convoy\Task\Retryable;
+use Convoy\Task\Scopeable;
 use Convoy\Task\Task;
 use Convoy\Tests\Support\AsyncTestCase;
 use PHPUnit\Framework\Attributes\Test;
@@ -223,7 +224,7 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $scope = $app->createScope();
             $attempts = 0;
 
-            $task = new class($attempts) implements Dispatchable, Retryable {
+            $task = new class($attempts) implements Scopeable, Retryable {
                 public RetryPolicy $retryPolicy {
                     get => RetryPolicy::fixed(3, 5);
                 }
@@ -260,12 +261,12 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
         $this->runAsync(function () use ($app): void {
             $scope = $app->createScope();
 
-            $task = new class implements Dispatchable, HasTimeout {
+            $task = new class implements Executable, HasTimeout {
                 public float $timeout {
                     get => 0.01;
                 }
 
-                public function __invoke(Scope $scope): string
+                public function __invoke(ExecutionScope $scope): string
                 {
                     delay(1.0);
                     return 'should_not_complete';
@@ -358,11 +359,11 @@ final class ConcurrentWorkloadTest extends AsyncTestCase
             $scope = $app->createScope();
 
             $results = $scope->concurrent([
-                'batch1' => Task::of(static fn(ExecutionScope $es) => $s->concurrent([
+                'batch1' => Task::of(static fn(ExecutionScope $es) => $es->concurrent([
                     'a' => Task::of(static fn(ExecutionScope $inner) => 'a'),
                     'b' => Task::of(static fn(ExecutionScope $inner) => 'b'),
                 ])),
-                'batch2' => Task::of(static fn(ExecutionScope $es) => $s->concurrent([
+                'batch2' => Task::of(static fn(ExecutionScope $es) => $es->concurrent([
                     'c' => Task::of(static fn(ExecutionScope $inner) => 'c'),
                     'd' => Task::of(static fn(ExecutionScope $inner) => 'd'),
                 ])),

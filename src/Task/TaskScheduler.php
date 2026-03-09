@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Convoy\Task;
 
-use Convoy\Scope;
+use Convoy\ExecutionScope;
 use SplPriorityQueue;
 use WeakMap;
 
@@ -12,14 +12,14 @@ use function React\Async\async;
 use function React\Async\await;
 use function React\Promise\race;
 
-final class TaskScheduler implements Dispatchable
+final class TaskScheduler implements Executable
 {
     private readonly SplPriorityQueue $queue;
     private WeakMap $results;
     private array $runningByPool = [];
 
     /**
-     * @param Dispatchable[] $tasks
+     * @param (Scopeable|Executable)[] $tasks
      * @param array<string, int> $poolLimits Keyed by enum name
      */
     public function __construct(
@@ -32,7 +32,7 @@ final class TaskScheduler implements Dispatchable
         $this->results = new WeakMap();
     }
 
-    private function processQueue(Scope $scope): void
+    private function processQueue(ExecutionScope $scope): void
     {
         $pending = [];
 
@@ -86,7 +86,7 @@ final class TaskScheduler implements Dispatchable
         }
     }
 
-    public function __invoke(Scope $scope): array
+    public function __invoke(ExecutionScope $scope): array
     {
         foreach ($this->tasks as $index => $task) {
             $priority = $task instanceof HasPriority ? $task->priority : 0;

@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Convoy\Handler;
 
-use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\ExecutionScope;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 
 /**
  * Wraps a handler task with middleware.
  *
- * Middleware are Dispatchable that can call the next handler via
+ * Middleware are Scopeable|Executable that can call the next handler via
  * $scope->attribute('handler.next'). Each middleware receives the
  * scope and can modify attributes before/after the inner call.
  *
@@ -20,21 +21,21 @@ use Convoy\Task\Dispatchable;
  * May remain in convoy-core as shared infrastructure, or be duplicated
  * if middleware semantics diverge between protocols.
  */
-final readonly class MiddlewareWrapper implements Dispatchable
+final readonly class MiddlewareWrapper implements Executable
 {
     /**
-     * @param list<Dispatchable> $middleware
+     * @param list<Scopeable|Executable> $middleware
      */
     public function __construct(
-        private Dispatchable $handler,
+        private Scopeable|Executable $handler,
         private array $middleware,
     ) {
     }
 
     /**
-     * @param list<Dispatchable> $middleware
+     * @param list<Scopeable|Executable> $middleware
      */
-    private function buildStack(Dispatchable $handler, array $middleware): Dispatchable
+    private function buildStack(Scopeable|Executable $handler, array $middleware): Scopeable|Executable
     {
         $next = $handler;
 
@@ -45,7 +46,7 @@ final readonly class MiddlewareWrapper implements Dispatchable
         return $next;
     }
 
-    public function __invoke(Scope $scope): mixed
+    public function __invoke(ExecutionScope $scope): mixed
     {
         if ($this->middleware === []) {
             return $scope->execute($this->handler);

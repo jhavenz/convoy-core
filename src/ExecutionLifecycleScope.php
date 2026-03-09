@@ -16,10 +16,11 @@ use Convoy\Service\LazyFactory;
 use Convoy\Service\LazySingleton;
 use Convoy\Service\ServiceGraph;
 use Convoy\Support\ClassNames;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
 use Convoy\Task\HasPriority;
 use Convoy\Task\HasTimeout;
 use Convoy\Task\Retryable;
+use Convoy\Task\Scopeable;
 use Convoy\Task\TaskConfig;
 use Convoy\Task\Traceable;
 use Convoy\Task\UsesPool;
@@ -91,7 +92,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         return $instance;
     }
 
-    public function execute(Dispatchable $task): mixed
+    public function execute(Scopeable|Executable $task): mixed
     {
         $this->throwIfCancelled();
 
@@ -104,7 +105,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         }
     }
 
-    public function executeFresh(Dispatchable $task): mixed
+    public function executeFresh(Scopeable|Executable $task): mixed
     {
         $this->throwIfCancelled();
 
@@ -125,7 +126,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
     }
 
     /**
-     * @param array<string|int, Dispatchable> $tasks
+     * @param array<string|int, Scopeable|Executable> $tasks
      * @return array<string|int, mixed>
      */
     public function concurrent(array $tasks): array
@@ -146,7 +147,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         });
     }
 
-    /** @param array<string|int, Dispatchable> $tasks */
+    /** @param array<string|int, Scopeable|Executable> $tasks */
     public function race(array $tasks): mixed
     {
         $this->throwIfCancelled();
@@ -165,7 +166,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         });
     }
 
-    /** @param array<string|int, Dispatchable> $tasks */
+    /** @param array<string|int, Scopeable|Executable> $tasks */
     public function any(array $tasks): mixed
     {
         $this->throwIfCancelled();
@@ -270,7 +271,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
     }
 
     /**
-     * @param list<Dispatchable> $tasks
+     * @param list<Scopeable|Executable> $tasks
      * @return list<mixed>
      */
     public function series(array $tasks): array
@@ -304,7 +305,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         delay($seconds);
     }
 
-    public function retry(Dispatchable $task, RetryPolicy $policy): mixed
+    public function retry(Scopeable|Executable $task, RetryPolicy $policy): mixed
     {
         $attempt = 0;
         $lastException = null;
@@ -370,7 +371,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         return new SettlementBag($ordered);
     }
 
-    public function timeout(float $seconds, Dispatchable $task): mixed
+    public function timeout(float $seconds, Scopeable|Executable $task): mixed
     {
         $this->throwIfCancelled();
 
@@ -466,7 +467,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         return $this->trace;
     }
 
-    public function defer(Dispatchable $task): void
+    public function defer(Scopeable|Executable $task): void
     {
         $this->throwIfCancelled();
 
@@ -501,7 +502,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         return $this->attributes[$key] ?? $default;
     }
 
-    private function executeWithBehavior(Dispatchable $task): mixed
+    private function executeWithBehavior(Scopeable|Executable $task): mixed
     {
         $config = $this->resolveTaskConfig($task);
 
@@ -528,7 +529,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         return $work();
     }
 
-    private function executeCore(Dispatchable $task): mixed
+    private function executeCore(Scopeable|Executable $task): mixed
     {
         $name = $this->taskName($task);
         $start = hrtime(true);
@@ -611,7 +612,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         throw $lastException ?? new \RuntimeException("Retry exhausted");
     }
 
-    private function resolveTaskConfig(Dispatchable $task): TaskConfig
+    private function resolveTaskConfig(Scopeable|Executable $task): TaskConfig
     {
         if (property_exists($task, 'config') && $task->config instanceof TaskConfig) {
             return $task->config;
@@ -687,7 +688,7 @@ final class ExecutionLifecycleScope implements ExecutionScope
         return $instance;
     }
 
-    private function taskName(Dispatchable $task): string
+    private function taskName(Scopeable|Executable $task): string
     {
         if ($task instanceof Traceable) {
             return $task->traceName;

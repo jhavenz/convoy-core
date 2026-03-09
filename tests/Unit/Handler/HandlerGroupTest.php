@@ -9,7 +9,6 @@ use Convoy\Handler\Handler;
 use Convoy\Handler\HandlerGroup;
 use Convoy\Handler\RouteConfig;
 use Convoy\ExecutionScope;
-use Convoy\Task\Dispatchable;
 use Convoy\Task\Task;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;

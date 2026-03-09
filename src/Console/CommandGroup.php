@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Convoy\Console;
 
+use Convoy\ExecutionScope;
 use Convoy\Handler\Handler;
 use Convoy\Handler\HandlerGroup;
-use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
 
 /**
  * Typed collection of CLI commands.
@@ -15,7 +15,7 @@ use Convoy\Task\Dispatchable;
  * Keys are command names.
  * Wraps HandlerGroup for dispatch mechanics.
  */
-final readonly class CommandGroup implements Dispatchable
+final readonly class CommandGroup implements Executable
 {
     private HandlerGroup $inner;
 
@@ -71,7 +71,7 @@ final readonly class CommandGroup implements Dispatchable
         return $this->inner;
     }
 
-    public function __invoke(Scope $scope): mixed
+    public function __invoke(ExecutionScope $scope): mixed
     {
         return ($this->inner)($scope);
     }

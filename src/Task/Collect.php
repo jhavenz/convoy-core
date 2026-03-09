@@ -6,7 +6,7 @@ namespace Convoy\Task;
 
 use Convoy\Scope;
 
-final readonly class Collect implements Dispatchable
+final readonly class Collect implements Scopeable
 {
     public function __construct(
         private LazySequence $sequence,

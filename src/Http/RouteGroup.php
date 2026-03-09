@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Convoy\Http;
 
+use Convoy\ExecutionScope;
 use Convoy\Handler\Handler;
 use Convoy\Handler\HandlerGroup;
-use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 
 /**
  * Typed collection of HTTP routes.
@@ -15,7 +16,7 @@ use Convoy\Task\Dispatchable;
  * Keys are "METHOD /path" format, parsed automatically.
  * Wraps HandlerGroup for dispatch mechanics.
  */
-final readonly class RouteGroup implements Dispatchable
+final readonly class RouteGroup implements Executable
 {
     private HandlerGroup $inner;
 
@@ -95,7 +96,7 @@ final readonly class RouteGroup implements Dispatchable
         return self::fromInner($newInner);
     }
 
-    public function wrap(Dispatchable ...$middleware): self
+    public function wrap(Scopeable|Executable ...$middleware): self
     {
         $newInner = $this->inner->wrap(...$middleware);
 
@@ -116,7 +117,7 @@ final readonly class RouteGroup implements Dispatchable
         return $this->inner;
     }
 
-    public function __invoke(Scope $scope): mixed
+    public function __invoke(ExecutionScope $scope): mixed
     {
         return ($this->inner)($scope);
     }

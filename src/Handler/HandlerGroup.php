@@ -7,8 +7,8 @@ namespace Convoy\Handler;
 use Convoy\Console\CommandConfig;
 use Convoy\ExecutionScope;
 use Convoy\Http\RouteConfig;
-use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 use Psr\Http\Message\ServerRequestInterface;
 use RuntimeException;
 
@@ -32,11 +32,11 @@ use RuntimeException;
  * migrate to convoy/console. Core dispatch logic may be extracted to a shared
  * interface or remain in convoy-core.
  */
-final readonly class HandlerGroup implements Dispatchable
+final readonly class HandlerGroup implements Executable
 {
     /**
      * @param array<string, Handler> $handlers
-     * @param list<Dispatchable> $middleware
+     * @param list<Scopeable|Executable> $middleware
      */
     private function __construct(
         private array $handlers,
@@ -52,7 +52,7 @@ final readonly class HandlerGroup implements Dispatchable
      * - Command names: "migrate", "cache:clear"
      * - Arbitrary keys for direct lookup
      *
-     * @param array<string, Handler|Dispatchable> $handlers
+     * @param array<string, Handler|Scopeable|Executable> $handlers
      */
     public static function of(array $handlers): self
     {
@@ -169,7 +169,7 @@ final readonly class HandlerGroup implements Dispatchable
      *
      * @param string|list<string> $method
      */
-    public function route(string $path, Dispatchable $handler, string|array $method = 'GET'): self
+    public function route(string $path, Scopeable|Executable $handler, string|array $method = 'GET'): self
     {
         $key = self::routeKey($path, $method);
         $config = RouteConfig::compile($path, $method);
@@ -180,7 +180,7 @@ final readonly class HandlerGroup implements Dispatchable
     /**
      * Add a console command.
      */
-    public function command(string $name, Dispatchable $handler, string $description = ''): self
+    public function command(string $name, Scopeable|Executable $handler, string $description = ''): self
     {
         return $this->add($name, Handler::command($handler, $description));
     }
@@ -240,7 +240,7 @@ final readonly class HandlerGroup implements Dispatchable
      *
      * Middleware runs in order: first added runs first.
      */
-    public function wrap(Dispatchable ...$middleware): self
+    public function wrap(Scopeable|Executable ...$middleware): self
     {
         return new self(
             $this->handlers,
@@ -292,7 +292,7 @@ final readonly class HandlerGroup implements Dispatchable
         );
     }
 
-    private function dispatchByKey(Scope $scope): mixed
+    private function dispatchByKey(ExecutionScope $scope): mixed
     {
         $key = $scope->attribute('handler.key');
         $handler = $this->handlers[$key] ?? null;
@@ -304,7 +304,7 @@ final readonly class HandlerGroup implements Dispatchable
         return $this->executeHandler($handler, $scope);
     }
 
-    private function dispatchRoute(Scope $scope): mixed
+    private function dispatchRoute(ExecutionScope $scope): mixed
     {
         /** @var ServerRequestInterface $request */
         $request = $scope->attribute('request');
@@ -332,7 +332,7 @@ final readonly class HandlerGroup implements Dispatchable
         throw new RuntimeException("No route matches $method $path");
     }
 
-    private function dispatchCommand(Scope $scope): mixed
+    private function dispatchCommand(ExecutionScope $scope): mixed
     {
         $name = $scope->attribute('command');
         $handler = $this->handlers[$name] ?? null;
@@ -344,12 +344,8 @@ final readonly class HandlerGroup implements Dispatchable
         return $this->executeHandler($handler, $scope);
     }
 
-    private function executeHandler(Handler $handler, Scope $scope): mixed
+    private function executeHandler(Handler $handler, ExecutionScope $scope): mixed
     {
-        if (!$scope instanceof ExecutionScope) {
-            throw new RuntimeException('HandlerGroup requires ExecutionScope for task execution');
-        }
-
         $task = $handler->task;
 
         $handlerMiddleware = $handler->config instanceof RouteConfig
@@ -368,7 +364,7 @@ final readonly class HandlerGroup implements Dispatchable
     /**
      * Dispatch to the appropriate handler based on scope attributes.
      */
-    public function __invoke(Scope $scope): mixed
+    public function __invoke(ExecutionScope $scope): mixed
     {
         if ($scope->attribute('handler.key') !== null) {
             return $this->dispatchByKey($scope);

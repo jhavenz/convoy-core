@@ -44,13 +44,19 @@ Application::starting($context)
     -> shutdown()          // Cleanup app resources
 ```
 
-Every task implements `Dispatchable`—a single-method interface:
+Every task implements `Scopeable` or `Executable`—single-method interfaces:
 
 ```php
 <?php
 
-interface Dispatchable {
+// Tasks needing only service resolution
+interface Scopeable {
     public function __invoke(Scope $scope): mixed;
+}
+
+// Tasks needing execution primitives (concurrency, cancellation)
+interface Executable {
+    public function __invoke(ExecutionScope $scope): mixed;
 }
 ```
 
@@ -81,7 +87,7 @@ interface Scope {
 // ExecutionScope: full execution capabilities
 interface ExecutionScope extends Scope {
     public bool $isCancelled { get; }
-    public function execute(Dispatchable $task): mixed;
+    public function execute(Scopeable|Executable $task): mixed;
     public function concurrent(array $tasks): array;
     public function throwIfCancelled(): void;
     public function onDispose(Closure $callback): void;
@@ -109,7 +115,7 @@ $user = $scope->execute($task);
 ```php
 <?php
 
-final readonly class FetchUser implements Dispatchable
+final readonly class FetchUser implements Scopeable
 {
     public function __construct(private int $id) {}
 
@@ -136,7 +142,7 @@ Tasks declare behavior through PHP 8.4 property hooks:
 ```php
 <?php
 
-final class DatabaseQuery implements Dispatchable, Retryable, HasTimeout
+final class DatabaseQuery implements Scopeable, Retryable, HasTimeout
 {
     public RetryPolicy $retryPolicy {
         get => RetryPolicy::exponential(3);
@@ -338,16 +344,14 @@ $result = $scope->retry(
     RetryPolicy::exponential(attempts: 3)
 );
 
-// Check cancellation within tasks
-final class LongRunningTask implements Dispatchable
+// Check cancellation within tasks (use Executable when you need ExecutionScope)
+final class LongRunningTask implements Executable
 {
-    public function __invoke(Scope $scope): mixed
+    public function __invoke(ExecutionScope $scope): mixed
     {
-        if ($scope instanceof ExecutionScope) {
-            foreach ($this->chunks as $chunk) {
-                $scope->throwIfCancelled();
-                $this->process($chunk);
-            }
+        foreach ($this->chunks as $chunk) {
+            $scope->throwIfCancelled();
+            $this->process($chunk);
         }
         return $this->result;
     }

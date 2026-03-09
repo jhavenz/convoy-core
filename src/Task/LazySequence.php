@@ -6,10 +6,9 @@ namespace Convoy\Task;
 
 use Closure;
 use Convoy\ExecutionScope;
-use Convoy\Scope;
 use Generator;
 
-final readonly class LazySequence implements Dispatchable
+final readonly class LazySequence implements Executable
 {
     private function __construct(
         private Closure $factory,
@@ -132,7 +131,7 @@ final readonly class LazySequence implements Dispatchable
         return new First($this);
     }
 
-    public function __invoke(Scope $scope): Generator
+    public function __invoke(ExecutionScope $scope): Generator
     {
         return ($this->factory)($scope);
     }

@@ -8,7 +8,8 @@ use Convoy\Application;
 use Convoy\Middleware\TaskMiddleware;
 use Convoy\ExecutionScope;
 use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 use Convoy\Task\Task;
 use Convoy\Tests\Support\AsyncTestCase;
 use PHPUnit\Framework\Attributes\Test;
@@ -29,7 +30,7 @@ final class TaskInterceptorTest extends AsyncTestCase
             ) {
             }
 
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 $this->receivedTask = $task;
                 $this->receivedScope = $scope;
@@ -58,7 +59,7 @@ final class TaskInterceptorTest extends AsyncTestCase
         $interceptor1 = new class($executionOrder) implements TaskMiddleware {
             public function __construct(private array &$order) {}
 
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 $this->order[] = 'before_1';
                 $result = $next();
@@ -70,7 +71,7 @@ final class TaskInterceptorTest extends AsyncTestCase
         $interceptor2 = new class($executionOrder) implements TaskMiddleware {
             public function __construct(private array &$order) {}
 
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 $this->order[] = 'before_2';
                 $result = $next();
@@ -100,7 +101,7 @@ final class TaskInterceptorTest extends AsyncTestCase
     public function interceptor_can_modify_result(): void
     {
         $interceptor = new class implements TaskMiddleware {
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 $result = $next();
                 return $result * 2;
@@ -124,7 +125,7 @@ final class TaskInterceptorTest extends AsyncTestCase
         $taskExecuted = false;
 
         $interceptor = new class implements TaskMiddleware {
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 return 'short-circuited';
             }
@@ -154,7 +155,7 @@ final class TaskInterceptorTest extends AsyncTestCase
         $interceptor1 = new class($interceptor1Caught) implements TaskMiddleware {
             public function __construct(private bool &$caught) {}
 
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 try {
                     return $next();
@@ -168,7 +169,7 @@ final class TaskInterceptorTest extends AsyncTestCase
         $interceptor2 = new class($interceptor2Caught) implements TaskMiddleware {
             public function __construct(private bool &$caught) {}
 
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 try {
                     return $next();
@@ -202,7 +203,7 @@ final class TaskInterceptorTest extends AsyncTestCase
     public function interceptor_can_catch_and_handle_exception(): void
     {
         $interceptor = new class implements TaskMiddleware {
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 try {
                     return $next();
@@ -233,7 +234,7 @@ final class TaskInterceptorTest extends AsyncTestCase
         $interceptor = new class($taskType) implements TaskMiddleware {
             public function __construct(private ?string &$type) {}
 
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 $this->type = $task::class;
                 return $next();
@@ -249,7 +250,7 @@ final class TaskInterceptorTest extends AsyncTestCase
         $scope->execute(Task::of(static fn(ExecutionScope $es) => 'result'));
         $this->assertSame(Task::class, $taskType);
 
-        $customTask = new class implements Dispatchable {
+        $customTask = new class implements Scopeable {
             public function __invoke(Scope $scope): string
             {
                 return 'custom';
@@ -264,14 +265,14 @@ final class TaskInterceptorTest extends AsyncTestCase
     public function multiple_interceptors_can_transform_result(): void
     {
         $addOne = new class implements TaskMiddleware {
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 return $next() + 1;
             }
         };
 
         $double = new class implements TaskMiddleware {
-            public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+            public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
             {
                 return $next() * 2;
             }
@@ -297,7 +298,7 @@ final class TaskInterceptorTest extends AsyncTestCase
             $interceptor = new class($timing) implements TaskMiddleware {
                 public function __construct(private array &$timing) {}
 
-                public function process(Dispatchable $task, Scope $scope, callable $next): mixed
+                public function process(Scopeable|Executable $task, ExecutionScope $scope, callable $next): mixed
                 {
                     $this->timing['before'] = hrtime(true);
                     $result = $next();

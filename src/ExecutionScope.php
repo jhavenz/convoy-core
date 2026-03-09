@@ -8,7 +8,8 @@ use Closure;
 use Convoy\Concurrency\CancellationToken;
 use Convoy\Concurrency\RetryPolicy;
 use Convoy\Concurrency\SettlementBag;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 
 /**
  * Execution scope with concurrency primitives, cancellation, and disposal.
@@ -22,49 +23,49 @@ interface ExecutionScope extends Scope
 {
     public bool $isCancelled { get; }
 
-    public function execute(Dispatchable $task): mixed;
+    public function execute(Scopeable|Executable $task): mixed;
 
-    public function executeFresh(Dispatchable $task): mixed;
+    public function executeFresh(Scopeable|Executable $task): mixed;
 
     /**
-     * @param array<string|int, Dispatchable> $tasks
+     * @param array<string|int, Scopeable|Executable> $tasks
      * @return array<string|int, mixed>
      */
     public function concurrent(array $tasks): array;
 
-    /** @param array<string|int, Dispatchable> $tasks */
+    /** @param array<string|int, Scopeable|Executable> $tasks */
     public function race(array $tasks): mixed;
 
-    /** @param array<string|int, Dispatchable> $tasks */
+    /** @param array<string|int, Scopeable|Executable> $tasks */
     public function any(array $tasks): mixed;
 
     /**
      * @template T
      * @param array<string|int, T> $items
-     * @param Closure(T): Dispatchable $fn
+     * @param Closure(T): (Scopeable|Executable) $fn
      * @return array<string|int, mixed>
      */
     public function map(array $items, Closure $fn, int $limit = 10): array;
 
     /**
-     * @param list<Dispatchable> $tasks
+     * @param list<Scopeable|Executable> $tasks
      * @return list<mixed>
      */
     public function series(array $tasks): array;
 
-    /** @param list<Dispatchable> $tasks */
+    /** @param list<Scopeable|Executable> $tasks */
     public function waterfall(array $tasks): mixed;
 
-    /** @param array<string|int, Dispatchable> $tasks */
+    /** @param array<string|int, Scopeable|Executable> $tasks */
     public function settle(array $tasks): SettlementBag;
 
-    public function timeout(float $seconds, Dispatchable $task): mixed;
+    public function timeout(float $seconds, Scopeable|Executable $task): mixed;
 
-    public function retry(Dispatchable $task, RetryPolicy $policy): mixed;
+    public function retry(Scopeable|Executable $task, RetryPolicy $policy): mixed;
 
     public function delay(float $seconds): void;
 
-    public function defer(Dispatchable $task): void;
+    public function defer(Scopeable|Executable $task): void;
 
     public function throwIfCancelled(): void;
 

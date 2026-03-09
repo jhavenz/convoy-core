@@ -24,10 +24,20 @@ ExecutionScope (interface extends Scope)
 ├── onDispose(), dispose(), $isCancelled
 │
 ExecutionLifecycleScope (implementation)
+
+Scopeable (interface) - SEPARATE
+├── __invoke(Scope $scope): mixed
+
+Executable (interface) - SEPARATE
+├── __invoke(ExecutionScope $scope): mixed
 ```
 
 **Scope**: Minimal interface—service resolution, attributes, tracing.
 **ExecutionScope**: Full execution—concurrency primitives, cancellation, disposal.
+**Scopeable**: Tasks needing only service resolution.
+**Executable**: Tasks needing full execution capabilities.
+
+The `execute()` method accepts `Scopeable|Executable` union type.
 
 ### Handler System
 
@@ -66,13 +76,20 @@ File closures receive `Scope` (service resolution). Handler `fn` closures receiv
 ```php
 <?php
 
-// Quick task via factory
+// Quick task via factory (implements Scopeable)
 Task::of(static fn(ExecutionScope $es) => $es->service(SomeService::class)->work());
 
-// Invokable class (preferred for reusable tasks)
-final class DoWork implements Dispatchable {
+// Invokable class - Scopeable for service resolution only
+final class DoWork implements Scopeable {
     public function __invoke(Scope $scope): mixed {
         return $scope->service(SomeService::class)->work();
+    }
+}
+
+// Invokable class - Executable for concurrency primitives
+final class DoParallelWork implements Executable {
+    public function __invoke(ExecutionScope $scope): mixed {
+        return $scope->concurrent([...]);
     }
 }
 ```

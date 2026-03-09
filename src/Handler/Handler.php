@@ -6,7 +6,8 @@ namespace Convoy\Handler;
 
 use Convoy\Console\CommandConfig;
 use Convoy\Http\RouteConfig;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 
 /**
  * Factory for creating handler entries with typed configurations.
@@ -21,7 +22,7 @@ use Convoy\Task\Dispatchable;
 final readonly class Handler
 {
     public function __construct(
-        public Dispatchable $task,
+        public Scopeable|Executable $task,
         public HandlerConfig $config,
     ) {
     }
@@ -31,7 +32,7 @@ final readonly class Handler
      *
      * @param string|list<string> $method HTTP method(s)
      */
-    public static function route(Dispatchable $task, string|array $method = 'GET'): self
+    public static function route(Scopeable|Executable $task, string|array $method = 'GET'): self
     {
         $methods = is_array($method) ? $method : [$method];
         $methods = array_map(strtoupper(...), $methods);
@@ -42,7 +43,7 @@ final readonly class Handler
     /**
      * Create a console command handler.
      */
-    public static function command(Dispatchable $task, string $description = ''): self
+    public static function command(Scopeable|Executable $task, string $description = ''): self
     {
         return new self($task, new CommandConfig(description: $description));
     }
@@ -50,7 +51,7 @@ final readonly class Handler
     /**
      * Create a handler with explicit config.
      */
-    public static function of(Dispatchable $task, ?HandlerConfig $config = null): self
+    public static function of(Scopeable|Executable $task, ?HandlerConfig $config = null): self
     {
         return new self($task, $config ?? new HandlerConfig());
     }

@@ -29,10 +29,9 @@ use Convoy\Examples\Support\StockBundle;
 use Convoy\Examples\Support\StockDataReader;
 use Convoy\ExecutionScope;
 use Convoy\Runner\ConsoleRunner;
-use Convoy\Scope;
 use Convoy\Service\ServiceBundle;
 use Convoy\Service\Services;
-use Convoy\Task\Dispatchable;
+use Convoy\Task\Executable;
 use Convoy\Task\Task;
 use Convoy\Task\Traceable;
 use Convoy\Trace\TraceType;
@@ -40,17 +39,14 @@ use Convoy\Trace\TraceType;
 /**
  * Invokable task class demonstrating Traceable interface.
  */
-final class ReadAllStocks implements Dispatchable, Traceable
+final class ReadAllStocks implements Executable, Traceable
 {
     public string $traceName {
         get => 'ReadAllStocks';
     }
 
-    /** @param Scope&ExecutionScope $scope */
-    public function __invoke(Scope $scope): mixed
+    public function __invoke(ExecutionScope $scope): mixed
     {
-        assert($scope instanceof ExecutionScope);
-
         $reader = $scope->service(StockDataReader::class);
         $symbols = $reader->symbols();
 
@@ -120,7 +116,7 @@ $commands = CommandGroup::of([
 
             $es->trace()->log(TraceType::Executing, "compare-$symbol1-$symbol2");
 
-            [$stock1, $stock2] = $es->concurrent([
+            $results = $es->concurrent([
                 $symbol1 => Task::of(
                     static fn(ExecutionScope $inner) => $inner->service(StockDataReader::class)->readStock($symbol1)
                 ),
@@ -128,6 +124,8 @@ $commands = CommandGroup::of([
                     static fn(ExecutionScope $inner) => $inner->service(StockDataReader::class)->readStock($symbol2)
                 ),
             ]);
+            $stock1 = $results[$symbol1];
+            $stock2 = $results[$symbol2];
 
             if ($stock1['rows'] === []) {
                 echo "Stock not found: $symbol1\n";

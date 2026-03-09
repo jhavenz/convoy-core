@@ -9,7 +9,7 @@ use Convoy\Scope;
 use InvalidArgumentException;
 use ReflectionFunction;
 
-final readonly class Task implements Dispatchable
+final readonly class Task implements Scopeable
 {
     private function __construct(
         private Closure $work,

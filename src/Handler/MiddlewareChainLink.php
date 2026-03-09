@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Convoy\Handler;
 
-use Convoy\Scope;
-use Convoy\Task\Dispatchable;
+use Convoy\ExecutionScope;
+use Convoy\Task\Executable;
+use Convoy\Task\Scopeable;
 
 /**
  * A single link in the middleware chain.
@@ -18,15 +19,15 @@ use Convoy\Task\Dispatchable;
  * May remain in convoy-core as shared infrastructure, or be duplicated
  * if middleware semantics diverge between protocols.
  */
-final readonly class MiddlewareChainLink implements Dispatchable
+final readonly class MiddlewareChainLink implements Executable
 {
     public function __construct(
-        private Dispatchable $middleware,
-        private Dispatchable $next,
+        private Scopeable|Executable $middleware,
+        private Scopeable|Executable $next,
     ) {
     }
 
-    public function __invoke(Scope $scope): mixed
+    public function __invoke(ExecutionScope $scope): mixed
     {
         $scope = $scope->withAttribute('handler.next', $this->next);
 
