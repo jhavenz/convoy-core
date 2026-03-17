@@ -44,6 +44,7 @@ interface ExecutionScope extends Scope, StreamContext
      * @template T
      * @param array<string|int, T> $items
      * @param Closure(T): (Scopeable|Executable) $fn
+     * @param int $limit
      * @return array<string|int, mixed>
      */
     public function map(array $items, Closure $fn, int $limit = 10): array;
@@ -67,8 +68,6 @@ interface ExecutionScope extends Scope, StreamContext
     public function delay(float $seconds): void;
 
     public function defer(Scopeable|Executable $task): void;
-
-    public function throwIfCancelled(): void;
 
     public function cancellation(): CancellationToken;
 
